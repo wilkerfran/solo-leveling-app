@@ -1,32 +1,34 @@
 import { account } from "@/lib/appwrite"
 import { ID } from "appwrite"
 
+// Wrapper que garante timeout em qualquer promise
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout")), ms)
+  )
+  return Promise.race([promise, timeout])
+}
+
 export const authService = {
-  // Registra um novo usuário
   async register(email: string, password: string, name: string) {
-    // ID.unique() gera um ID aleatório — o Appwrite exige isso
     const user = await account.create(ID.unique(), email, password, name)
-    // Após registrar, já fazemos login automaticamente
     await this.login(email, password)
     return user
   },
 
-  // Faz login e cria uma sessão
   async login(email: string, password: string) {
     return account.createEmailPasswordSession(email, password)
   },
 
-  // Faz logout e destroi a sessão atual
   async logout() {
     return account.deleteSession("current")
   },
 
-  // Retorna o usuário da sessão atual (null se não estiver logado)
   async getCurrentUser() {
     try {
-      return await account.get()
+      // Timeout de 4 segundos — se o Appwrite não responder, retorna null
+      return await withTimeout(account.get(), 4000)
     } catch {
-      // O Appwrite lança erro se não há sessão — tratamos retornando null
       return null
     }
   },
