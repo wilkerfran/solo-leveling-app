@@ -2,7 +2,7 @@
   "name": "Solo Leveling App",
   "short_name": "Solo Leveling",
   "description": "Evolua sua vida como um personagem de RPG",
-  "start_url": "/dashboard",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#080B14",
   "theme_color": "#7C3AED",
