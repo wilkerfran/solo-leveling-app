@@ -91,7 +91,27 @@ export const questService = {
       { status: "archived" }
     )
   },
+
+  // Busca quests concluídas para o histórico
+async listCompleted(characterId: string): Promise<Quest[]> {
+  const response = await databases.listDocuments(
+    DB_ID,
+    COLLECTIONS.QUESTS,
+    [
+      Query.equal("characterId", characterId),
+      Query.equal("status", "completed"),
+      Query.orderDesc("$updatedAt"),
+      Query.limit(50),
+    ]
+  )
+  return response.documents.map(doc => ({
+    ...doc,
+    attributeRewards: JSON.parse(doc.attributeRewards),
+  })) as unknown as Quest[]
+},
 }
+
+
 
 // Mapeia categoria para quais atributos crescem
 function getCategoryAttributes(

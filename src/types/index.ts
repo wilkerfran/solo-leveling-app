@@ -39,12 +39,12 @@ export interface Quest {
 // Representa um evento de ganho de XP
 export interface XPEvent {
   $id: string
+  $createdAt: string
   characterId: string
   questId: string
   xpGained: number
   levelBefore: number
   levelAfter: number
-  createdAt: string
 }
 
 // Constantes de XP por dificuldade
@@ -54,3 +54,71 @@ export const XP_REWARDS = {
   hard: 150,
   legendary: 300,
 } as const
+
+export interface Achievement {
+  $id: string
+  $createdAt: string
+  characterId: string
+  achievementId: string
+  title: string
+  description: string
+  type: "fixed" | "custom"
+  unlockedAt: string
+  isCustom: boolean
+  goal?: string
+  isCompleted: boolean
+}
+
+// Conquistas fixas pré-definidas
+type AchievementStats = {
+  level: number
+  questsCompleted: number
+  legendaryCompleted: number
+  totalXP: number
+  streak: number
+}
+
+export const FIXED_ACHIEVEMENTS = [
+  {
+    id: "first_quest",
+    title: "Primeira Missão",
+    description: "Complete sua primeira quest",
+    check: (stats: AchievementStats) => stats.questsCompleted >= 1,
+  },
+  {
+    id: "ten_quests",
+    title: "Caçador Dedicado",
+    description: "Complete 10 quests",
+    check: (stats: AchievementStats) => stats.questsCompleted >= 10,
+  },
+  {
+    id: "level_5",
+    title: "Ascensão",
+    description: "Alcance o nível 5",
+    check: (stats: AchievementStats) => stats.level >= 5,
+  },
+  {
+    id: "level_10",
+    title: "Caçador de Elite",
+    description: "Alcance o nível 10",
+    check: (stats: AchievementStats) => stats.level >= 10,
+  },
+  {
+    id: "legendary_quest",
+    title: "Lenda",
+    description: "Complete uma quest lendária",
+    check: (stats: AchievementStats) => stats.legendaryCompleted >= 1,
+  },
+  {
+    id: "xp_1000",
+    title: "Mil Experiências",
+    description: "Acumule 1000 XP no total",
+    check: (stats: AchievementStats) => stats.totalXP >= 1000,
+  },
+  {
+    id: "streak_7",
+    title: "Semana Perfeita",
+    description: "Complete quests por 7 dias seguidos",
+    check: (stats: AchievementStats) => stats.streak >= 7,
+  },
+] as const

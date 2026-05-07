@@ -1,8 +1,9 @@
 import { databases, DB_ID, COLLECTIONS } from "@/lib/appwrite"
-import { ID } from "appwrite"
-import { Character, Quest } from "@/types"
+import { ID, Query } from "appwrite"
+import { Character, Quest, XPEvent } from "@/types"
 import { calculateLevelUp } from "@/lib/xp"
 import { characterService } from "./character.service"
+
 
 export const xpService = {
   // Processa o ganho de XP ao completar uma quest
@@ -49,4 +50,19 @@ export const xpService = {
 
     return { updatedCharacter, didLevelUp }
   },
+  // Busca histórico de eventos de XP para o gráfico
+async listEvents(characterId: string): Promise<XPEvent[]> {
+  const response = await databases.listDocuments(
+    DB_ID,
+    COLLECTIONS.XP_EVENTS,
+    [
+      Query.equal("characterId", characterId),
+      Query.orderAsc("$createdAt"),
+      Query.limit(100),
+    ]
+  )
+  return response.documents as unknown as XPEvent[]
+},
+  
 }
+

@@ -10,6 +10,12 @@ import { QuestCard } from "@/components/quests/QuestCard"
 import { LevelUpModal } from "@/components/ui/LevelUpModal"
 import { XPFloat } from "@/components/ui/XPFloat"
 import { Quest } from "@/types"
+import Link from "next/link"
+import { NotificationBanner } from "@/components/ui/NotificationBanner"
+import { achievementService } from "@/services/achievement.service"
+import { xpService } from "@/services/xp.service"
+import { questService } from "@/services/quest.service"
+
 
 const CLASS_LABELS: Record<string, string> = {
   warrior: "Guerreiro",
@@ -68,20 +74,53 @@ export default function DashboardPage() {
     setShowForm(false)
   }
 
-  async function handleCompleteQuest(quest: Quest) {
-    if (!character) return
-    setCompletingId(quest.$id)
-    try {
-      const { updatedCharacter, didLevelUp } = await completeQuest(quest, character)
-      updateCharacter(updatedCharacter)
-      setXpFloat(quest.xpReward)
-      if (didLevelUp) {
-        setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
-      }
-    } finally {
-      setCompletingId(null)
+async function handleCompleteQuest(quest: Quest) {
+  if (!character) return
+  setCompletingId(quest.$id)
+  try {
+    const { updatedCharacter, didLevelUp } = await completeQuest(quest, character)
+    updateCharacter(updatedCharacter)
+    setXpFloat(quest.xpReward)
+
+    // Busca conquistas já desbloqueadas para não duplicar
+    const existing = await achievementService.listByCharacter(character.$id)
+    const unlockedIds = existing.filter(a => a.isCompleted).map(a => a.achievementId)
+
+    // Busca stats para verificar conquistas
+    const completedQuests = await questService.listCompleted(character.$id)
+    const xpEvents = await xpService.listEvents(character.$id)
+
+    const stats = {
+      level: updatedCharacter.level,
+      questsCompleted: completedQuests.length,
+      legendaryCompleted: completedQuests.filter(q => q.difficulty === "legendary").length,
+      totalXP: xpEvents.reduce((sum, e) => sum + e.xpGained, 0),
+      streak: 0, // implementar depois
     }
+
+    const newAchievements = await achievementService.checkAndUnlock(
+      character.$id, stats, unlockedIds
+    )
+
+    if (newAchievements.length > 0) {
+      // Mostra notificação de conquista desbloqueada
+      setTimeout(() => {
+        if (Notification.permission === "granted") {
+          new Notification("Conquista desbloqueada!", {
+            body: newAchievements[0].title,
+            icon: "/icons/icon-sl.png",
+          })
+        }
+      }, 1500)
+    }
+
+    if (didLevelUp) {
+      setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
+    }
+  } finally {
+    setCompletingId(null)
   }
+}
 
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "#080B14", paddingBottom: "60px" }}>
@@ -92,31 +131,44 @@ export default function DashboardPage() {
       {xpFloat && (
         <XPFloat amount={xpFloat} onDone={() => setXpFloat(null)} />
       )}
+      {/* Banner de notificação */}
+<NotificationBanner questsCount={quests.length} />
 
       {/* Header */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 30,
-        backgroundColor: "rgba(13,17,23,0.92)",
-        borderBottom: "1px solid #1F2937",
-        backdropFilter: "blur(8px)",
-      }}>
-        <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 32px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#7C3AED" }} className="animate-pulse" />
-            <span style={{ color: "white", fontWeight: 700, letterSpacing: "0.15em", fontSize: "13px", textTransform: "uppercase" }}>
-              Solo Leveling
-            </span>
-          </div>
-          <button
-            onClick={async () => { await logout(); router.push("/login") }}
-            style={{ color: "#64748B", fontSize: "14px", background: "none", border: "none", cursor: "pointer" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "white")}
-            onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
-          >
-            Sair
-          </button>
-        </div>
-      </div>
+<div style={{
+  position: "sticky", top: 0, zIndex: 30,
+  backgroundColor: "rgba(13,17,23,0.92)",
+  borderBottom: "1px solid #1F2937",
+  backdropFilter: "blur(8px)",
+}}>
+  <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 32px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#7C3AED" }} className="animate-pulse" />
+      <span style={{ color: "white", fontWeight: 700, letterSpacing: "0.15em", fontSize: "13px", textTransform: "uppercase" }}>
+        Solo Leveling
+      </span>
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <Link href="/achievements" style={{ color: "#64748B", fontSize: "13px", textDecoration: "none" }}
+    onMouseEnter={e => (e.currentTarget.style.color = "#A78BFA")}
+    onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
+  >
+    Conquistas
+  </Link>
+      <Link href="/progress" style={{ color: "#A78BFA", fontSize: "13px", textDecoration: "none" }}>
+        Progresso
+      </Link>
+      <button
+        onClick={async () => { await logout(); router.push("/login") }}
+        style={{ color: "#64748B", fontSize: "14px", background: "none", border: "none", cursor: "pointer" }}
+        onMouseEnter={e => (e.currentTarget.style.color = "white")}
+        onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
+      >
+        Sair
+      </button>
+    </div>
+  </div>
+</div>
 
       {/* Conteúdo */}
       <div style={{ maxWidth: "680px", margin: "0 auto", padding: "32px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
