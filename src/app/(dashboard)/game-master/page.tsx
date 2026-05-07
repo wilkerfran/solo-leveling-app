@@ -43,6 +43,10 @@ export default function GameMasterPage() {
       setCompletedQuests(completed)
       setAchievements(achieve.filter(a => a.isCompleted))
       setContextLoaded(true)
+    }).catch(err => {
+      console.error("Erro ao carregar contexto:", err)
+      // Mesmo com erro, libera o chat com dados parciais
+      setContextLoaded(true)
     })
   }, [user, character, authLoading, charLoading, router])
 
@@ -72,7 +76,7 @@ export default function GameMasterPage() {
 
   async function handleSend(content?: string) {
     const text = content ?? input.trim()
-    if (!text || aiLoading || !contextLoaded) return
+    if (!text || aiLoading) return
     setInput("")
     await sendMessage(text, context)
   }
@@ -117,7 +121,6 @@ export default function GameMasterPage() {
       {/* Área de mensagens */}
       <div style={{ flex: 1, overflowY: "auto", maxWidth: "680px", width: "100%", margin: "0 auto", padding: "24px 24px 0" }}>
 
-        {/* Estado inicial — sem mensagens */}
         {messages.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0" }}>
             <div style={{
@@ -137,13 +140,12 @@ export default function GameMasterPage() {
               Seu guia pessoal conhece seu progresso. Pergunte qualquer coisa.
             </p>
 
-            {/* Sugestões */}
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "400px", margin: "0 auto" }}>
               {SUGGESTED_QUESTIONS.map(q => (
                 <button
                   key={q}
                   onClick={() => handleSend(q)}
-                  disabled={!contextLoaded}
+                  disabled={aiLoading}
                   style={{
                     backgroundColor: "rgba(124,58,237,0.08)",
                     border: "1px solid rgba(124,58,237,0.2)",
@@ -151,7 +153,7 @@ export default function GameMasterPage() {
                     padding: "12px 16px",
                     color: "#A78BFA",
                     fontSize: "13px",
-                    cursor: "pointer",
+                    cursor: aiLoading ? "not-allowed" : "pointer",
                     textAlign: "left",
                     transition: "all 0.2s",
                   }}
@@ -171,7 +173,6 @@ export default function GameMasterPage() {
           </div>
         )}
 
-        {/* Mensagens */}
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "24px" }}>
           {messages.map((msg, i) => (
             <div
@@ -183,7 +184,6 @@ export default function GameMasterPage() {
                 alignItems: "flex-start",
               }}
             >
-              {/* Avatar */}
               <div style={{
                 width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
                 backgroundColor: msg.role === "user" ? "rgba(124,58,237,0.2)" : "rgba(30,41,59,0.8)",
@@ -194,7 +194,6 @@ export default function GameMasterPage() {
                 {msg.role === "user" ? "⚔" : "👁"}
               </div>
 
-              {/* Bolha */}
               <div style={{
                 maxWidth: "75%",
                 backgroundColor: msg.role === "user" ? "rgba(124,58,237,0.12)" : "#111827",
@@ -215,7 +214,6 @@ export default function GameMasterPage() {
             </div>
           ))}
 
-          {/* Loading */}
           {aiLoading && (
             <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
               <div style={{
@@ -236,7 +234,6 @@ export default function GameMasterPage() {
                   <div key={i} style={{
                     width: "6px", height: "6px", borderRadius: "50%",
                     backgroundColor: "#7C3AED",
-                    animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
                   }} className="animate-pulse" />
                 ))}
               </div>
@@ -247,7 +244,7 @@ export default function GameMasterPage() {
         </div>
       </div>
 
-      {/* Input fixo no bottom */}
+      {/* Input */}
       <div style={{
         flexShrink: 0,
         borderTop: "1px solid #1F2937",
@@ -262,7 +259,7 @@ export default function GameMasterPage() {
             onKeyDown={handleKeyDown}
             placeholder="Fale com o Game Master..."
             rows={1}
-            disabled={aiLoading || !contextLoaded}
+            disabled={aiLoading}
             style={{
               flex: 1,
               backgroundColor: "#111827",
@@ -283,7 +280,7 @@ export default function GameMasterPage() {
           />
           <button
             onClick={() => handleSend()}
-            disabled={!input.trim() || aiLoading || !contextLoaded}
+            disabled={!input.trim() || aiLoading}
             style={{
               backgroundColor: input.trim() && !aiLoading ? "#7C3AED" : "#1F2937",
               color: input.trim() && !aiLoading ? "white" : "#475569",
