@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { authService } from "@/services/auth.service"
 import { Models } from "appwrite"
 
-// Estado global fora do hook — persiste entre remontagens
 let globalUser: Models.User<Models.Preferences> | null = null
 let globalLoading = true
 let listeners: Array<() => void> = []
@@ -20,10 +19,24 @@ export function useAuth() {
     const listener = () => forceUpdate(n => n + 1)
     listeners.push(listener)
 
-    // Só busca o usuário uma vez
     if (globalLoading) {
+      // Timeout de segurança — se demorar mais de 5s, considera sem sessão
+      const timeout = setTimeout(() => {
+        if (globalLoading) {
+          globalLoading = false
+          globalUser = null
+          notifyListeners()
+        }
+      }, 5000)
+
       authService.getCurrentUser().then((user) => {
+        clearTimeout(timeout)
         globalUser = user
+        globalLoading = false
+        notifyListeners()
+      }).catch(() => {
+        clearTimeout(timeout)
+        globalUser = null
         globalLoading = false
         notifyListeners()
       })
