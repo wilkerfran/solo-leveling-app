@@ -155,6 +155,12 @@ async function handleCompleteQuest(quest: Quest) {
   >
     Conquistas
   </Link>
+  <Link href="/game-master" style={{ color: "#64748B", fontSize: "13px", textDecoration: "none" }}
+  onMouseEnter={e => (e.currentTarget.style.color = "#A78BFA")}
+  onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
+>
+  Game Master
+</Link>
       <Link href="/progress" style={{ color: "#A78BFA", fontSize: "13px", textDecoration: "none" }}>
         Progresso
       </Link>
