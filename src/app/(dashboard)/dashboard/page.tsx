@@ -9,13 +9,11 @@ import { QuestForm } from "@/components/quests/QuestForm"
 import { QuestCard } from "@/components/quests/QuestCard"
 import { LevelUpModal } from "@/components/ui/LevelUpModal"
 import { XPFloat } from "@/components/ui/XPFloat"
-import { Quest } from "@/types"
-import Link from "next/link"
 import { NotificationBanner } from "@/components/ui/NotificationBanner"
 import { achievementService } from "@/services/achievement.service"
 import { xpService } from "@/services/xp.service"
 import { questService } from "@/services/quest.service"
-
+import { Quest } from "@/types"
 
 const CLASS_LABELS: Record<string, string> = {
   warrior: "Guerreiro",
@@ -39,7 +37,7 @@ const card: React.CSSProperties = {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading: authLoading, logout } = useAuth()
+  const { user, isLoading: authLoading } = useAuth()
   const { character, isLoading: charLoading, hasCharacter, updateCharacter } = useCharacter(user?.$id)
   const { quests, isLoading: questsLoading, createQuest, completeQuest, archiveQuest } = useQuests(character?.$id)
   const router = useRouter()
@@ -74,56 +72,52 @@ export default function DashboardPage() {
     setShowForm(false)
   }
 
-async function handleCompleteQuest(quest: Quest) {
-  if (!character) return
-  setCompletingId(quest.$id)
-  try {
-    const { updatedCharacter, didLevelUp } = await completeQuest(quest, character)
-    updateCharacter(updatedCharacter)
-    setXpFloat(quest.xpReward)
+  async function handleCompleteQuest(quest: Quest) {
+    if (!character) return
+    setCompletingId(quest.$id)
+    try {
+      const { updatedCharacter, didLevelUp } = await completeQuest(quest, character)
+      updateCharacter(updatedCharacter)
+      setXpFloat(quest.xpReward)
 
-    // Busca conquistas já desbloqueadas para não duplicar
-    const existing = await achievementService.listByCharacter(character.$id)
-    const unlockedIds = existing.filter(a => a.isCompleted).map(a => a.achievementId)
+      const existing = await achievementService.listByCharacter(character.$id)
+      const unlockedIds = existing.filter(a => a.isCompleted).map(a => a.achievementId)
+      const completedQuests = await questService.listCompleted(character.$id)
+      const xpEvents = await xpService.listEvents(character.$id)
 
-    // Busca stats para verificar conquistas
-    const completedQuests = await questService.listCompleted(character.$id)
-    const xpEvents = await xpService.listEvents(character.$id)
+      const stats = {
+        level: updatedCharacter.level,
+        questsCompleted: completedQuests.length,
+        legendaryCompleted: completedQuests.filter(q => q.difficulty === "legendary").length,
+        totalXP: xpEvents.reduce((sum, e) => sum + e.xpGained, 0),
+        streak: 0,
+      }
 
-    const stats = {
-      level: updatedCharacter.level,
-      questsCompleted: completedQuests.length,
-      legendaryCompleted: completedQuests.filter(q => q.difficulty === "legendary").length,
-      totalXP: xpEvents.reduce((sum, e) => sum + e.xpGained, 0),
-      streak: 0, // implementar depois
+      const newAchievements = await achievementService.checkAndUnlock(
+        character.$id, stats, unlockedIds
+      )
+
+      if (newAchievements.length > 0) {
+        setTimeout(() => {
+          if (Notification.permission === "granted") {
+            new Notification("Conquista desbloqueada!", {
+              body: newAchievements[0].title,
+              icon: "/icons/icon-sl.png",
+            })
+          }
+        }, 1500)
+      }
+
+      if (didLevelUp) {
+        setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
+      }
+    } finally {
+      setCompletingId(null)
     }
-
-    const newAchievements = await achievementService.checkAndUnlock(
-      character.$id, stats, unlockedIds
-    )
-
-    if (newAchievements.length > 0) {
-      // Mostra notificação de conquista desbloqueada
-      setTimeout(() => {
-        if (Notification.permission === "granted") {
-          new Notification("Conquista desbloqueada!", {
-            body: newAchievements[0].title,
-            icon: "/icons/icon-sl.png",
-          })
-        }
-      }, 1500)
-    }
-
-    if (didLevelUp) {
-      setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
-    }
-  } finally {
-    setCompletingId(null)
   }
-}
 
   return (
-    <main style={{ minHeight: "100vh", backgroundColor: "#080B14", paddingBottom: "60px" }}>
+    <main style={{ minHeight: "100vh", backgroundColor: "#080B14", paddingBottom: "20px" }}>
 
       {levelUpData && (
         <LevelUpModal level={levelUpData} onClose={() => setLevelUpData(null)} />
@@ -131,66 +125,19 @@ async function handleCompleteQuest(quest: Quest) {
       {xpFloat && (
         <XPFloat amount={xpFloat} onDone={() => setXpFloat(null)} />
       )}
-      {/* Banner de notificação */}
-<NotificationBanner questsCount={quests.length} />
 
-      {/* Header */}
-<div style={{
-  position: "sticky", top: 0, zIndex: 30,
-  backgroundColor: "rgba(13,17,23,0.92)",
-  borderBottom: "1px solid #1F2937",
-  backdropFilter: "blur(8px)",
-}}>
-  <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 32px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-      <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#7C3AED" }} className="animate-pulse" />
-      <span style={{ color: "white", fontWeight: 700, letterSpacing: "0.15em", fontSize: "13px", textTransform: "uppercase" }}>
-        Solo Leveling
-      </span>
-    </div>
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <Link href="/achievements" style={{ color: "#64748B", fontSize: "13px", textDecoration: "none" }}
-    onMouseEnter={e => (e.currentTarget.style.color = "#A78BFA")}
-    onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
-  >
-    Conquistas
-  </Link>
-  <Link href="/game-master" style={{ color: "#64748B", fontSize: "13px", textDecoration: "none" }}
-  onMouseEnter={e => (e.currentTarget.style.color = "#A78BFA")}
-  onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
->
-  Game Master
-</Link>
-      <Link href="/progress" style={{ color: "#A78BFA", fontSize: "13px", textDecoration: "none" }}>
-        Progresso
-      </Link>
-      <button
-        onClick={async () => { await logout(); router.push("/login") }}
-        style={{ color: "#64748B", fontSize: "14px", background: "none", border: "none", cursor: "pointer" }}
-        onMouseEnter={e => (e.currentTarget.style.color = "white")}
-        onMouseLeave={e => (e.currentTarget.style.color = "#64748B")}
-      >
-        Sair
-      </button>
-    </div>
-  </div>
-</div>
+      <div style={{ maxWidth: "680px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* Conteúdo */}
-      <div style={{ maxWidth: "680px", margin: "0 auto", padding: "32px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <NotificationBanner questsCount={quests.length} />
 
         {/* Card do personagem */}
         <div style={{ ...card, position: "relative", overflow: "hidden" }}>
-          {/* Decoração */}
           <div style={{
             position: "absolute", top: 0, right: 0,
-            width: "200px", height: "200px",
-            borderRadius: "50%",
+            width: "200px", height: "200px", borderRadius: "50%",
             backgroundColor: "rgba(124,58,237,0.06)",
-            transform: "translate(50%, -50%)",
-            pointerEvents: "none",
+            transform: "translate(50%, -50%)", pointerEvents: "none",
           }} />
-
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "24px" }}>
             <div>
               <p style={{ color: "#A78BFA", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "6px" }}>
@@ -207,8 +154,6 @@ async function handleCompleteQuest(quest: Quest) {
               </p>
             </div>
           </div>
-
-          {/* Barra XP */}
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
             <span style={{ color: "#64748B", fontSize: "12px" }}>Experiência</span>
             <span style={{ color: "#94A3B8", fontSize: "12px" }}>{character.xp} / {character.xpToNextLevel} XP</span>
@@ -235,13 +180,7 @@ async function handleCompleteQuest(quest: Quest) {
                     <span style={{ color: "white", fontSize: "14px", fontWeight: 600 }}>{value}</span>
                   </div>
                   <div style={{ width: "100%", height: "6px", backgroundColor: "#1F2937", borderRadius: "99px", overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%",
-                      borderRadius: "99px",
-                      backgroundColor: color,
-                      width: `${pct}%`,
-                      transition: "width 0.7s ease",
-                    }} />
+                    <div style={{ height: "100%", borderRadius: "99px", backgroundColor: color, width: `${pct}%`, transition: "width 0.7s ease" }} />
                   </div>
                 </div>
               )
@@ -258,14 +197,9 @@ async function handleCompleteQuest(quest: Quest) {
             <button
               onClick={() => setShowForm(!showForm)}
               style={{
-                color: "#A78BFA",
-                fontSize: "12px",
-                padding: "6px 14px",
-                borderRadius: "8px",
-                border: "1px solid rgba(124,58,237,0.35)",
-                backgroundColor: "transparent",
-                cursor: "pointer",
-                transition: "all 0.2s",
+                color: "#A78BFA", fontSize: "12px", padding: "6px 14px",
+                borderRadius: "8px", border: "1px solid rgba(124,58,237,0.35)",
+                backgroundColor: "transparent", cursor: "pointer", transition: "all 0.2s",
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.borderColor = "#7C3AED"
@@ -294,12 +228,7 @@ async function handleCompleteQuest(quest: Quest) {
               <p style={{ color: "#475569", fontSize: "13px" }}>Carregando quests...</p>
             </div>
           ) : quests.length === 0 ? (
-            <div style={{
-              padding: "40px 20px",
-              textAlign: "center",
-              border: "1px dashed #1F2937",
-              borderRadius: "12px",
-            }}>
+            <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #1F2937", borderRadius: "12px" }}>
               <p style={{ color: "#64748B", fontSize: "14px", marginBottom: "6px" }}>Nenhuma quest ativa</p>
               <p style={{ color: "#475569", fontSize: "12px" }}>Crie sua primeira missão acima</p>
             </div>

@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { questService } from "@/services/quest.service"
 import { xpService } from "@/services/xp.service"
-import { Quest } from "@/types"
-import { XPEvent } from "@/types"
+import { Quest, XPEvent } from "@/types"
 import { XPChart } from "@/components/character/XPChart"
 import { QuestHistory } from "@/components/quests/QuestHistory"
-import Link from "next/link"
 
 export default function ProgressPage() {
   const { user, isLoading: authLoading } = useAuth()
@@ -48,29 +46,18 @@ export default function ProgressPage() {
   const totalQuests = completedQuests.length
   const legendaryCount = completedQuests.filter(q => q.difficulty === "legendary").length
 
+  const card: React.CSSProperties = {
+    backgroundColor: "#111827",
+    border: "1px solid #1F2937",
+    borderRadius: "16px",
+    padding: "24px",
+  }
+
   return (
-    <main style={{ minHeight: "100vh", backgroundColor: "#080B14", paddingBottom: "60px" }}>
+    <main style={{ minHeight: "100vh", backgroundColor: "#080B14", paddingBottom: "20px" }}>
+      <div style={{ maxWidth: "680px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* Header */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 30,
-        backgroundColor: "rgba(13,17,23,0.92)",
-        borderBottom: "1px solid #1F2937",
-        backdropFilter: "blur(8px)",
-      }}>
-        <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 32px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <Link href="/dashboard" style={{ color: "#64748B", fontSize: "14px", textDecoration: "none" }}>
-              ← Voltar
-            </Link>
-            <span style={{ color: "white", fontWeight: 700, fontSize: "15px" }}>
-              Progresso
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: "680px", margin: "0 auto", padding: "32px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <h1 style={{ color: "white", fontSize: "20px", fontWeight: 700 }}>Progresso</h1>
 
         {/* Stats rápidos */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
@@ -79,13 +66,7 @@ export default function ProgressPage() {
             { label: "Quests", value: totalQuests, color: "#22C55E" },
             { label: "Lendárias", value: legendaryCount, color: "#F59E0B" },
           ].map(stat => (
-            <div key={stat.label} style={{
-              backgroundColor: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: "12px",
-              padding: "16px",
-              textAlign: "center",
-            }}>
+            <div key={stat.label} style={{ ...card, textAlign: "center", padding: "16px" }}>
               <p style={{ color: stat.color, fontSize: "24px", fontWeight: 800, lineHeight: 1 }}>
                 {stat.value}
               </p>
@@ -97,12 +78,7 @@ export default function ProgressPage() {
         </div>
 
         {/* Gráfico de XP */}
-        <div style={{
-          backgroundColor: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: "16px",
-          padding: "24px",
-        }}>
+        <div style={card}>
           <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
             Evolução de XP
           </p>
@@ -110,12 +86,7 @@ export default function ProgressPage() {
         </div>
 
         {/* Histórico */}
-        <div style={{
-          backgroundColor: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: "16px",
-          padding: "24px",
-        }}>
+        <div style={card}>
           <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
             Histórico de quests
           </p>

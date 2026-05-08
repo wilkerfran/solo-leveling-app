@@ -9,7 +9,6 @@ import { useEffect, useState, useRef } from "react"
 import { questService } from "@/services/quest.service"
 import { achievementService } from "@/services/achievement.service"
 import { Quest, Achievement } from "@/types"
-import Link from "next/link"
 
 const SUGGESTED_QUESTIONS = [
   "Como está meu progresso geral?",
@@ -28,7 +27,6 @@ export default function GameMasterPage() {
   const [input, setInput] = useState("")
   const [completedQuests, setCompletedQuests] = useState<Quest[]>([])
   const [achievements, setAchievements] = useState<Achievement[]>([])
-  const [contextLoaded, setContextLoaded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,12 +40,7 @@ export default function GameMasterPage() {
     ]).then(([completed, achieve]) => {
       setCompletedQuests(completed)
       setAchievements(achieve.filter(a => a.isCompleted))
-      setContextLoaded(true)
-    }).catch(err => {
-      console.error("Erro ao carregar contexto:", err)
-      // Mesmo com erro, libera o chat com dados parciais
-      setContextLoaded(true)
-    })
+    }).catch(err => console.error("Erro ao carregar contexto:", err))
   }, [user, character, authLoading, charLoading, router])
 
   useEffect(() => {
@@ -56,7 +49,11 @@ export default function GameMasterPage() {
 
   if (authLoading || charLoading || !character) {
     return (
-      <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#080B14" }}>
+      <main style={{
+        height: "100%", display: "flex",
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: "#080B14",
+      }}>
         <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
       </main>
     )
@@ -89,57 +86,58 @@ export default function GameMasterPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", backgroundColor: "#080B14", display: "flex", flexDirection: "column" }}>
+  <main className="game-master-main" style={{
+  backgroundColor: "#080B14",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+}}>
 
-      {/* Header */}
+      {/* Título + Limpar chat */}
       <div style={{
-        position: "sticky", top: 0, zIndex: 30,
-        backgroundColor: "rgba(13,17,23,0.95)",
-        borderBottom: "1px solid #1F2937",
-        backdropFilter: "blur(8px)",
         flexShrink: 0,
+        maxWidth: "680px", margin: "0 auto", width: "100%",
+        padding: "16px 24px 12px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        borderBottom: "1px solid #1F2937",
       }}>
-        <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <Link href="/dashboard" style={{ color: "#64748B", fontSize: "14px", textDecoration: "none" }}>
-              ← Voltar
-            </Link>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#7C3AED" }} className="animate-pulse" />
-              <span style={{ color: "white", fontWeight: 700, fontSize: "14px" }}>Game Master</span>
-            </div>
-          </div>
-          <button
-            onClick={clearMessages}
-            style={{ color: "#475569", fontSize: "12px", background: "none", border: "none", cursor: "pointer" }}
-          >
-            Limpar chat
-          </button>
-        </div>
+        <h1 style={{ color: "white", fontSize: "15px", fontWeight: 700 }}>Game Master</h1>
+        <button
+          onClick={clearMessages}
+          style={{ color: "#475569", fontSize: "12px", background: "none", border: "none", cursor: "pointer" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "white")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#475569")}
+        >
+          Limpar chat
+        </button>
       </div>
 
-      {/* Área de mensagens */}
-      <div style={{ flex: 1, overflowY: "auto", maxWidth: "680px", width: "100%", margin: "0 auto", padding: "24px 24px 0" }}>
+      {/* Área de mensagens — scroll interno */}
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        maxWidth: "680px", width: "100%",
+        margin: "0 auto",
+        padding: "20px 24px 0",
+      }}>
 
         {messages.length === 0 && (
-          <div style={{ textAlign: "center", padding: "48px 0" }}>
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div style={{
-              width: "64px", height: "64px", borderRadius: "50%",
+              width: "60px", height: "60px", borderRadius: "50%",
               backgroundColor: "rgba(124,58,237,0.15)",
               border: "1px solid rgba(124,58,237,0.3)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 20px",
-              fontSize: "28px",
+              margin: "0 auto 16px", fontSize: "26px",
             }}>
               ⚔️
             </div>
-            <h2 style={{ color: "white", fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}>
+            <h2 style={{ color: "white", fontSize: "17px", fontWeight: 700, marginBottom: "8px" }}>
               Game Master
             </h2>
-            <p style={{ color: "#64748B", fontSize: "14px", marginBottom: "32px" }}>
+            <p style={{ color: "#64748B", fontSize: "13px", marginBottom: "28px" }}>
               Seu guia pessoal conhece seu progresso. Pergunte qualquer coisa.
             </p>
-
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "400px", margin: "0 auto" }}>
               {SUGGESTED_QUESTIONS.map(q => (
                 <button
@@ -149,13 +147,10 @@ export default function GameMasterPage() {
                   style={{
                     backgroundColor: "rgba(124,58,237,0.08)",
                     border: "1px solid rgba(124,58,237,0.2)",
-                    borderRadius: "10px",
-                    padding: "12px 16px",
-                    color: "#A78BFA",
-                    fontSize: "13px",
+                    borderRadius: "10px", padding: "11px 16px",
+                    color: "#A78BFA", fontSize: "13px",
                     cursor: aiLoading ? "not-allowed" : "pointer",
-                    textAlign: "left",
-                    transition: "all 0.2s",
+                    textAlign: "left", transition: "all 0.2s",
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.backgroundColor = "rgba(124,58,237,0.15)"
@@ -173,27 +168,21 @@ export default function GameMasterPage() {
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "16px" }}>
           {messages.map((msg, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                flexDirection: msg.role === "user" ? "row-reverse" : "row",
-                gap: "10px",
-                alignItems: "flex-start",
-              }}
-            >
+            <div key={i} style={{
+              display: "flex",
+              flexDirection: msg.role === "user" ? "row-reverse" : "row",
+              gap: "10px", alignItems: "flex-start",
+            }}>
               <div style={{
                 width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
                 backgroundColor: msg.role === "user" ? "rgba(124,58,237,0.2)" : "rgba(30,41,59,0.8)",
                 border: `1px solid ${msg.role === "user" ? "rgba(124,58,237,0.4)" : "#1F2937"}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
               }}>
                 {msg.role === "user" ? "⚔" : "👁"}
               </div>
-
               <div style={{
                 maxWidth: "75%",
                 backgroundColor: msg.role === "user" ? "rgba(124,58,237,0.12)" : "#111827",
@@ -203,10 +192,7 @@ export default function GameMasterPage() {
               }}>
                 <p style={{
                   color: msg.role === "user" ? "#C4B5FD" : "#CBD5E1",
-                  fontSize: "14px",
-                  lineHeight: 1.6,
-                  margin: 0,
-                  whiteSpace: "pre-wrap",
+                  fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap",
                 }}>
                   {msg.content}
                 </p>
@@ -218,16 +204,12 @@ export default function GameMasterPage() {
             <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
               <div style={{
                 width: "32px", height: "32px", borderRadius: "50%",
-                backgroundColor: "rgba(30,41,59,0.8)",
-                border: "1px solid #1F2937",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px",
+                backgroundColor: "rgba(30,41,59,0.8)", border: "1px solid #1F2937",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
               }}>👁</div>
               <div style={{
-                backgroundColor: "#111827",
-                border: "1px solid #1F2937",
-                borderRadius: "4px 16px 16px 16px",
-                padding: "16px",
+                backgroundColor: "#111827", border: "1px solid #1F2937",
+                borderRadius: "4px 16px 16px 16px", padding: "16px",
                 display: "flex", gap: "4px", alignItems: "center",
               }}>
                 {[0, 1, 2].map(i => (
@@ -239,18 +221,17 @@ export default function GameMasterPage() {
               </div>
             </div>
           )}
-
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input */}
+      {/* Input fixo no bottom do chat */}
       <div style={{
         flexShrink: 0,
         borderTop: "1px solid #1F2937",
         backgroundColor: "rgba(8,11,20,0.95)",
         backdropFilter: "blur(8px)",
-        padding: "16px 24px",
+        padding: "12px 24px",
       }}>
         <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", gap: "10px", alignItems: "flex-end" }}>
           <textarea
@@ -261,19 +242,11 @@ export default function GameMasterPage() {
             rows={1}
             disabled={aiLoading}
             style={{
-              flex: 1,
-              backgroundColor: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: "12px",
-              padding: "12px 16px",
-              color: "white",
-              fontSize: "14px",
-              resize: "none",
-              outline: "none",
-              fontFamily: "inherit",
-              lineHeight: 1.5,
-              maxHeight: "120px",
-              overflowY: "auto",
+              flex: 1, backgroundColor: "#111827", border: "1px solid #1F2937",
+              borderRadius: "12px", padding: "11px 16px", color: "white",
+              fontSize: "14px", resize: "none", outline: "none",
+              fontFamily: "inherit", lineHeight: 1.5,
+              maxHeight: "100px", overflowY: "auto",
             }}
             onFocus={e => (e.currentTarget.style.borderColor = "#7C3AED")}
             onBlur={e => (e.currentTarget.style.borderColor = "#1F2937")}
@@ -284,14 +257,9 @@ export default function GameMasterPage() {
             style={{
               backgroundColor: input.trim() && !aiLoading ? "#7C3AED" : "#1F2937",
               color: input.trim() && !aiLoading ? "white" : "#475569",
-              border: "none",
-              borderRadius: "12px",
-              width: "44px",
-              height: "44px",
+              border: "none", borderRadius: "12px", width: "42px", height: "42px",
               cursor: input.trim() && !aiLoading ? "pointer" : "not-allowed",
-              fontSize: "18px",
-              transition: "all 0.2s",
-              flexShrink: 0,
+              fontSize: "18px", transition: "all 0.2s", flexShrink: 0,
             }}
           >
             ↑

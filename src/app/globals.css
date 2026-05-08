@@ -81,3 +81,53 @@ body {
   pointer-events: none;
   border-radius: inherit;
 }
+
+.nav-header {
+  display: flex;
+}
+
+.nav-bottom {
+  display: flex;
+}
+
+@media (min-width: 768px) {
+  .nav-bottom {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .nav-header {
+    display: none !important;
+  }
+}
+
+/* No mobile o padding top não é necessário pois o header está escondido */
+@media (max-width: 767px) {
+  .dashboard-content {
+    padding-top: 0 !important;
+  }
+}
+
+/* No desktop o padding bottom não é necessário pois a nav bottom está escondida */
+@media (min-width: 768px) {
+  .dashboard-content {
+    padding-bottom: 0 !important;
+  }
+}
+
+.game-master-main {
+  height: calc(100vh - 60px);
+}
+
+@media (max-width: 767px) {
+  .game-master-main {
+    height: calc(100vh - 80px); /* 80px = altura da nav bottom */
+  }
+}
+
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  33% { transform: translateY(-30px) translateX(10px); }
+  66% { transform: translateY(-10px) translateX(-15px); }
+}
