@@ -14,6 +14,8 @@ import { achievementService } from "@/services/achievement.service"
 import { xpService } from "@/services/xp.service"
 import { questService } from "@/services/quest.service"
 import { Quest } from "@/types"
+import { WeeklyPlannerModal } from "@/components/ui/WeeklyPlannerModal"
+import { useWeeklyPenalty } from "@/hooks/useWeeklyPenalty"
 
 const CLASS_LABELS: Record<string, string> = {
   warrior: "Guerreiro",
@@ -39,19 +41,34 @@ const card: React.CSSProperties = {
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth()
   const { character, isLoading: charLoading, hasCharacter, updateCharacter } = useCharacter(user?.$id)
-  const { quests, isLoading: questsLoading, createQuest, completeQuest, archiveQuest } = useQuests(character?.$id)
+  const { quests, isLoading: questsLoading, createQuest, completeQuest, archiveQuest, refresh } = useQuests(character?.$id)
   const router = useRouter()
 
   const [showForm, setShowForm] = useState(false)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [levelUpData, setLevelUpData] = useState<number | null>(null)
   const [xpFloat, setXpFloat] = useState<number | null>(null)
+  const [showPlanner, setShowPlanner] = useState(false)
+
+  const { shouldShowPlanner, setShouldShowPlanner } = useWeeklyPenalty(
+    character,
+    quests
+  )
 
   useEffect(() => {
     if (authLoading || charLoading) return
     if (!user) { router.push("/login"); return }
     if (user && !hasCharacter) { router.push("/create-character") }
   }, [user, authLoading, charLoading, hasCharacter, router])
+
+  useEffect(() => {
+    if (shouldShowPlanner) {
+      queueMicrotask(() => {
+        setShowPlanner(true)
+        setShouldShowPlanner(false)
+      })
+    }
+  }, [shouldShowPlanner, setShouldShowPlanner])
 
   if (authLoading || charLoading || !character) {
     return (
@@ -125,6 +142,18 @@ export default function DashboardPage() {
       {xpFloat && (
         <XPFloat amount={xpFloat} onDone={() => setXpFloat(null)} />
       )}
+      {showPlanner && character && (
+        <WeeklyPlannerModal
+          character={character}
+          activeQuests={quests}
+          onClose={() => setShowPlanner(false)}
+          onPlanCreated={(updatedCharacter) => {
+            updateCharacter(updatedCharacter)
+            refresh()
+            setShowPlanner(false)
+          }}
+        />
+      )}
 
       <div style={{ maxWidth: "680px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
 
@@ -163,6 +192,31 @@ export default function DashboardPage() {
           </div>
           <p style={{ textAlign: "right", color: "#475569", fontSize: "11px", marginTop: "6px" }}>{xpPercent}%</p>
         </div>
+
+        {/* Botão do Planejador Semanal */}
+        <button
+          onClick={() => setShowPlanner(true)}
+          style={{
+            width: "100%", padding: "14px",
+            backgroundColor: "rgba(124,58,237,0.08)",
+            border: "1px solid rgba(124,58,237,0.25)",
+            borderRadius: "14px", color: "#A78BFA",
+            fontSize: "14px", fontWeight: 600,
+            cursor: "pointer", transition: "all 0.2s",
+            display: "flex", alignItems: "center",
+            justifyContent: "center", gap: "8px",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = "rgba(124,58,237,0.15)"
+            e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)"
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = "rgba(124,58,237,0.08)"
+            e.currentTarget.style.borderColor = "rgba(124,58,237,0.25)"
+          }}
+        >
+          📋 Planejador Semanal
+        </button>
 
         {/* Atributos */}
         <div style={card}>

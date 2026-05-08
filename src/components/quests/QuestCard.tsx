@@ -1,6 +1,8 @@
 "use client"
 
 import { Quest } from "@/types"
+import { formatDistanceToNow } from "date-fns"
+import { ptBR } from "date-fns/locale"
 
 const DIFFICULTY_STYLES = {
   easy:      { label: "Fácil",    color: "#22C55E",  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)" },
@@ -47,6 +49,12 @@ export function QuestCard({ quest, onComplete, onArchive, isCompleting }: QuestC
         <p style={{ color: "white", fontSize: "14px", fontWeight: 600, marginBottom: "2px" }}>
           {quest.title}
         </p>
+        {quest.isRecurring && quest.nextResetAt && (
+  <p style={{ color: "#475569", fontSize: "11px", marginTop: "4px" }}>
+    Reseta em {formatDistanceToNow(new Date(quest.nextResetAt), { locale: ptBR, addSuffix: true })}
+  </p>
+)}
+        
         {quest.description && (
           <p style={{ color: "#64748B", fontSize: "12px", marginTop: "4px" }}>
             {quest.description}

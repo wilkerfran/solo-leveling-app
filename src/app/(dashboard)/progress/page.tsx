@@ -9,8 +9,11 @@ import { xpService } from "@/services/xp.service"
 import { Quest, XPEvent } from "@/types"
 import { XPChart } from "@/components/character/XPChart"
 import { QuestHistory } from "@/components/quests/QuestHistory"
+import { penaltyService } from "@/services/penalty.service"
+import { PenaltyEvent } from "@/types"
 
 export default function ProgressPage() {
+  const [penaltyEvents, setPenaltyEvents] = useState<PenaltyEvent[]>([])
   const { user, isLoading: authLoading } = useAuth()
   const { character, isLoading: charLoading } = useCharacter(user?.$id)
   const router = useRouter()
@@ -25,13 +28,15 @@ export default function ProgressPage() {
     if (!character) return
 
     Promise.all([
-      questService.listCompleted(character.$id),
-      xpService.listEvents(character.$id),
-    ]).then(([quests, events]) => {
-      setCompletedQuests(quests)
-      setXpEvents(events)
-      setIsLoading(false)
-    }).catch(() => setIsLoading(false))
+  questService.listCompleted(character.$id),
+  xpService.listEvents(character.$id),
+  penaltyService.listByCharacter(character.$id),
+]).then(([quests, events, penalties]) => {
+  setCompletedQuests(quests)
+  setXpEvents(events)
+  setPenaltyEvents(penalties)
+  setIsLoading(false)
+})
   }, [user, character, authLoading, charLoading, router])
 
   if (authLoading || charLoading || !character) {
@@ -91,6 +96,41 @@ export default function ProgressPage() {
             Histórico de quests
           </p>
           <QuestHistory quests={completedQuests} isLoading={isLoading} />
+          {/* Histórico de penalidades */}
+{penaltyEvents.length > 0 && (
+  <div style={card}>
+    <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
+      Penalidades aplicadas
+    </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {penaltyEvents.map(penalty => (
+        <div key={penalty.$id} style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px",
+          backgroundColor: "rgba(239,68,68,0.06)",
+          border: "1px solid rgba(239,68,68,0.15)",
+          borderRadius: "10px",
+        }}>
+          <div>
+            <p style={{ color: "#CBD5E1", fontSize: "13px", fontWeight: 500 }}>
+              {penalty.questTitle}
+            </p>
+            <p style={{ color: "#475569", fontSize: "11px", marginTop: "2px" }}>
+              Semana de {penalty.weekOf}
+            </p>
+          </div>
+          <span style={{
+            color: "#EF4444", fontSize: "13px", fontWeight: 700,
+            backgroundColor: "rgba(239,68,68,0.1)",
+            padding: "4px 10px", borderRadius: "6px",
+          }}>
+            -{penalty.xpLost} XP
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         </div>
 
       </div>

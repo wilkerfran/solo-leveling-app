@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { questService } from "@/services/quest.service"
 import { xpService } from "@/services/xp.service"
 import { Quest, Character } from "@/types"
@@ -9,14 +9,24 @@ export function useQuests(characterId: string | undefined) {
   const [quests, setQuests] = useState<Quest[]>([])
   const [isLoading, setIsLoading] = useState(!!characterId)
 
+  const fetchQuests = useCallback(() => {
+    if (!characterId) return
+    questService.listByCharacter(characterId)
+      .then((data) => {
+        setQuests(data)
+        setIsLoading(false)
+      })
+      .catch(() => setIsLoading(false))
+  }, [characterId])
+
   useEffect(() => {
     if (!characterId) return
 
-    questService.listByCharacter(characterId).then((data) => {
-      setQuests(data)
-      setIsLoading(false)
-    }).catch(() => setIsLoading(false))
-  }, [characterId])
+    // Primeiro verifica se há quests recorrentes para resetar
+    questService.resetRecurringQuests(characterId)
+      .then(() => fetchQuests())
+      .catch(() => fetchQuests())
+  }, [fetchQuests, characterId])
 
   async function createQuest(
     data: Parameters<typeof questService.create>[1]
@@ -28,13 +38,8 @@ export function useQuests(characterId: string | undefined) {
   }
 
   async function completeQuest(quest: Quest, character: Character) {
-    // Atualiza status da quest
     await questService.complete(quest.$id)
-
-    // Remove da lista de ativas
     setQuests(prev => prev.filter(q => q.$id !== quest.$id))
-
-    // Processa XP e retorna personagem atualizado
     const result = await xpService.processQuestCompletion(character, quest)
     return result
   }
@@ -44,5 +49,5 @@ export function useQuests(characterId: string | undefined) {
     setQuests(prev => prev.filter(q => q.$id !== questId))
   }
 
-  return { quests, isLoading, createQuest, completeQuest, archiveQuest }
+  return { quests, isLoading, createQuest, completeQuest, archiveQuest, refresh: fetchQuests }
 }

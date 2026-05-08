@@ -3,7 +3,6 @@ import { ID, Query } from "appwrite"
 import { Quest, XP_REWARDS } from "@/types"
 
 export const questService = {
-  // Busca todas as quests ativas do personagem
   async listByCharacter(characterId: string): Promise<Quest[]> {
     const response = await databases.listDocuments(
       DB_ID,
@@ -20,7 +19,23 @@ export const questService = {
     })) as unknown as Quest[]
   },
 
-  // Cria uma nova quest
+  async listCompleted(characterId: string): Promise<Quest[]> {
+    const response = await databases.listDocuments(
+      DB_ID,
+      COLLECTIONS.QUESTS,
+      [
+        Query.equal("characterId", characterId),
+        Query.equal("status", "completed"),
+        Query.orderDesc("$updatedAt"),
+        Query.limit(50),
+      ]
+    )
+    return response.documents.map(doc => ({
+      ...doc,
+      attributeRewards: JSON.parse(doc.attributeRewards),
+    })) as unknown as Quest[]
+  },
+
   async create(
     characterId: string,
     data: {
@@ -33,10 +48,7 @@ export const questService = {
       dueDate?: string
     }
   ): Promise<Quest> {
-    // Calcula recompensas baseado na dificuldade
     const xpReward = XP_REWARDS[data.difficulty]
-
-    // Atributos que crescem dependem da categoria
     const attributeRewards = getCategoryAttributes(data.category, data.difficulty)
 
     const doc = await databases.createDocument(
@@ -56,6 +68,8 @@ export const questService = {
         recurringType: data.recurringType ?? null,
         dueDate: data.dueDate ?? null,
         completedAt: null,
+        lastCompletedAt: null,
+        nextResetAt: null,
       }
     )
 
@@ -65,24 +79,87 @@ export const questService = {
     } as unknown as Quest
   },
 
-  // Marca a quest como concluída
   async complete(questId: string): Promise<Quest> {
-    const doc = await databases.updateDocument(
+    const now = new Date()
+
+    // Busca a quest atual para verificar se é recorrente
+    const doc = await databases.getDocument(DB_ID, COLLECTIONS.QUESTS, questId)
+    const quest = {
+      ...doc,
+      attributeRewards: JSON.parse(doc.attributeRewards),
+    } as unknown as Quest
+
+    // Calcula o próximo reset baseado no tipo de recorrência
+    let nextResetAt: string | null = null
+    let newStatus: string = "completed"
+
+    if (quest.isRecurring && quest.recurringType) {
+      nextResetAt = calculateNextReset(quest.recurringType)
+      // Quests recorrentes ficam como "completed" mas têm nextResetAt definido
+      newStatus = "completed"
+    }
+
+    const updated = await databases.updateDocument(
       DB_ID,
       COLLECTIONS.QUESTS,
       questId,
       {
-        status: "completed",
-        completedAt: new Date().toISOString(),
+        status: newStatus,
+        completedAt: now.toISOString(),
+        lastCompletedAt: now.toISOString(),
+        nextResetAt,
       }
     )
+
     return {
-      ...doc,
-      attributeRewards: JSON.parse(doc.attributeRewards),
+      ...updated,
+      attributeRewards: JSON.parse(updated.attributeRewards),
     } as unknown as Quest
   },
 
-  // Arquiva uma quest sem completar
+  // Verifica e reseta quests recorrentes que já passaram do nextResetAt
+  async resetRecurringQuests(characterId: string): Promise<number> {
+    const now = new Date()
+
+    // Busca quests completadas com nextResetAt no passado
+    const response = await databases.listDocuments(
+      DB_ID,
+      COLLECTIONS.QUESTS,
+      [
+        Query.equal("characterId", characterId),
+        Query.equal("status", "completed"),
+        Query.isNotNull("nextResetAt"),
+      ]
+    )
+
+    let resetCount = 0
+
+    for (const doc of response.documents) {
+      const nextReset = doc.nextResetAt ? new Date(doc.nextResetAt) : null
+      if (nextReset && nextReset <= now) {
+        // Calcula o próximo reset baseado no tipo
+        const quest = doc as unknown as Quest
+        const newNextReset = quest.recurringType
+          ? calculateNextReset(quest.recurringType)
+          : null
+
+        await databases.updateDocument(
+          DB_ID,
+          COLLECTIONS.QUESTS,
+          doc.$id,
+          {
+            status: "active",
+            completedAt: null,
+            nextResetAt: newNextReset,
+          }
+        )
+        resetCount++
+      }
+    }
+
+    return resetCount
+  },
+
   async archive(questId: string): Promise<void> {
     await databases.updateDocument(
       DB_ID,
@@ -91,29 +168,28 @@ export const questService = {
       { status: "archived" }
     )
   },
-
-  // Busca quests concluídas para o histórico
-async listCompleted(characterId: string): Promise<Quest[]> {
-  const response = await databases.listDocuments(
-    DB_ID,
-    COLLECTIONS.QUESTS,
-    [
-      Query.equal("characterId", characterId),
-      Query.equal("status", "completed"),
-      Query.orderDesc("$updatedAt"),
-      Query.limit(50),
-    ]
-  )
-  return response.documents.map(doc => ({
-    ...doc,
-    attributeRewards: JSON.parse(doc.attributeRewards),
-  })) as unknown as Quest[]
-},
 }
 
+function calculateNextReset(recurringType: "daily" | "weekly"): string {
+  const now = new Date()
 
+  if (recurringType === "daily") {
+    // Próximo reset à meia-noite do dia seguinte
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(0, 0, 0, 0)
+    return tomorrow.toISOString()
+  } else {
+    // Próximo reset na segunda-feira da próxima semana
+    const nextMonday = new Date(now)
+    const day = nextMonday.getDay()
+    const daysUntilMonday = day === 0 ? 1 : 8 - day
+    nextMonday.setDate(nextMonday.getDate() + daysUntilMonday)
+    nextMonday.setHours(0, 0, 0, 0)
+    return nextMonday.toISOString()
+  }
+}
 
-// Mapeia categoria para quais atributos crescem
 function getCategoryAttributes(
   category: string,
   difficulty: Quest["difficulty"]
@@ -121,16 +197,16 @@ function getCategoryAttributes(
   const bonus = difficulty === "easy" ? 1
     : difficulty === "medium" ? 2
     : difficulty === "hard" ? 3
-    : 5 // legendary
+    : 5
 
   const map: Record<string, Partial<Record<string, number>>> = {
-    saude:      { health: bonus, strength: Math.floor(bonus / 2) },
-    estudos:    { focus: bonus, creativity: Math.floor(bonus / 2) },
-    carreira:   { discipline: bonus, focus: Math.floor(bonus / 2) },
-    exercicio:  { strength: bonus, health: Math.floor(bonus / 2) },
-    habito:     { discipline: bonus },
-    criativo:   { creativity: bonus, focus: Math.floor(bonus / 2) },
-    outro:      { discipline: bonus },
+    saude:     { health: bonus, strength: Math.floor(bonus / 2) },
+    estudos:   { focus: bonus, creativity: Math.floor(bonus / 2) },
+    carreira:  { discipline: bonus, focus: Math.floor(bonus / 2) },
+    exercicio: { strength: bonus, health: Math.floor(bonus / 2) },
+    habito:    { discipline: bonus },
+    criativo:  { creativity: bonus, focus: Math.floor(bonus / 2) },
+    outro:     { discipline: bonus },
   }
 
   return map[category] ?? { discipline: bonus }
