@@ -1,7 +1,6 @@
 import { account } from "@/lib/appwrite"
 import { ID } from "appwrite"
 
-// Wrapper que garante timeout em qualquer promise
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error("timeout")), ms)
@@ -17,6 +16,12 @@ export const authService = {
   },
 
   async login(email: string, password: string) {
+    // Tenta deletar sessão ativa antes de criar uma nova
+    try {
+      await account.deleteSession("current")
+    } catch {
+      // Sem sessão ativa — normal, continua
+    }
     return account.createEmailPasswordSession(email, password)
   },
 
@@ -26,7 +31,6 @@ export const authService = {
 
   async getCurrentUser() {
     try {
-      // Timeout de 4 segundos — se o Appwrite não responder, retorna null
       return await withTimeout(account.get(), 4000)
     } catch {
       return null
