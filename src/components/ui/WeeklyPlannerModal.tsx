@@ -358,42 +358,51 @@ export function WeeklyPlannerModal({
 
                 {/* Botão de aprovar plano */}
                 {pendingPlan && !isCreating && (
-                  <div style={{
-                    backgroundColor: "rgba(124,58,237,0.08)",
-                    border: "1px solid rgba(124,58,237,0.25)",
-                    borderRadius: "12px", padding: "16px",
-                    marginTop: "8px",
-                  }}>
-                    <p style={{ color: "#A78BFA", fontSize: "13px", fontWeight: 600, marginBottom: "12px" }}>
-                      Plano pronto — {pendingPlan.quests.length} quests e {pendingPlan.customAchievements.length} metas
-                    </p>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
-                        onClick={() => handleCreatePlan(pendingPlan)}
-                        style={{
-                          flex: 1, padding: "10px",
-                          backgroundColor: "#7C3AED", border: "none",
-                          borderRadius: "8px", color: "white",
-                          cursor: "pointer", fontSize: "13px", fontWeight: 600,
-                        }}
-                      >
-                        Criar tudo agora ⚔️
-                      </button>
-                      <button
-                        onClick={() => sendMessage("Quero fazer ajustes no plano", context)}
-                        style={{
-                          flex: 1, padding: "10px",
-                          backgroundColor: "transparent",
-                          border: "1px solid #1F2937",
-                          borderRadius: "8px", color: "#64748B",
-                          cursor: "pointer", fontSize: "13px",
-                        }}
-                      >
-                        Fazer ajustes
-                      </button>
-                    </div>
-                  </div>
-                )}
+  <div style={{
+    backgroundColor: "rgba(124,58,237,0.08)",
+    border: "1px solid rgba(124,58,237,0.25)",
+    borderRadius: "12px", padding: "16px",
+    marginTop: "8px",
+  }}>
+    <p style={{ color: "#A78BFA", fontSize: "13px", fontWeight: 600, marginBottom: "12px" }}>
+      Plano pronto — {pendingPlan.quests.length} quests e {pendingPlan.customAchievements.length} metas
+    </p>
+    <div style={{ display: "flex", gap: "8px" }}>
+      <button
+        onClick={() => {
+          if (isCreating) return  // previne duplo clique
+          handleCreatePlan(pendingPlan)
+        }}
+        disabled={isCreating}
+        style={{
+          flex: 1, padding: "10px",
+          backgroundColor: "#7C3AED", border: "none",
+          borderRadius: "8px", color: "white",
+          cursor: isCreating ? "not-allowed" : "pointer",
+          fontSize: "13px", fontWeight: 600,
+          opacity: isCreating ? 0.5 : 1,
+        }}
+      >
+        {isCreating ? "Criando..." : "Criar tudo agora ⚔️"}
+      </button>
+      <button
+        onClick={() => sendMessage("Quero fazer ajustes no plano", context)}
+        disabled={isCreating}
+        style={{
+          flex: 1, padding: "10px",
+          backgroundColor: "transparent",
+          border: "1px solid #1F2937",
+          borderRadius: "8px", color: "#64748B",
+          cursor: isCreating ? "not-allowed" : "pointer",
+          fontSize: "13px",
+          opacity: isCreating ? 0.5 : 1,
+        }}
+      >
+        Fazer ajustes
+      </button>
+    </div>
+  </div>
+)}
 
                 {isCreating && (
                   <div style={{ textAlign: "center", padding: "20px", color: "#A78BFA", fontSize: "13px" }}>

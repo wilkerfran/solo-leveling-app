@@ -143,17 +143,24 @@ export default function DashboardPage() {
         <XPFloat amount={xpFloat} onDone={() => setXpFloat(null)} />
       )}
       {showPlanner && character && (
-        <WeeklyPlannerModal
-          character={character}
-          activeQuests={quests}
-          onClose={() => setShowPlanner(false)}
-          onPlanCreated={(updatedCharacter) => {
-            updateCharacter(updatedCharacter)
-            refresh()
-            setShowPlanner(false)
-          }}
-        />
-      )}
+  <WeeklyPlannerModal
+    character={character}
+    activeQuests={quests.filter(q => {
+      const thisWeekStart = new Date()
+      const day = thisWeekStart.getDay()
+      const diff = day === 0 ? -6 : 1 - day
+      thisWeekStart.setDate(thisWeekStart.getDate() + diff)
+      thisWeekStart.setHours(0, 0, 0, 0)
+      return new Date(q.createdAt) < thisWeekStart
+    })}
+    onClose={() => setShowPlanner(false)}
+    onPlanCreated={(updatedCharacter) => {
+      updateCharacter(updatedCharacter)
+      refresh()
+      setShowPlanner(false)
+    }}
+  />
+)}
 
       <div style={{ maxWidth: "680px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
 

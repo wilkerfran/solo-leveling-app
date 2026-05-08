@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
 import { GoogleGenAI } from "@google/genai"
 
+async function callWithRetry(ai: GoogleGenAI, prompt: string, attempts = 3): Promise<string> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: prompt,
+      })
+      return response.text ?? ""
+    } catch (error: unknown) {
+      const isRetryable = error instanceof Error &&
+        (error.message.includes("503") || error.message.includes("UNAVAILABLE"))
+
+      if (isRetryable && i < attempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        continue
+      }
+      throw error
+    }
+  }
+  return ""
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { messages, context, phase } = await request.json()
@@ -51,7 +73,6 @@ QUANDO ESTIVER NA FASE SUMMARY, retorne exatamente neste formato JSON no final d
 }
 ===END_PLAN===`
 
-    // Monta histórico da conversa
     const conversationHistory = messages.map((m: { role: string; content: string }) => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.content }],
@@ -63,14 +84,8 @@ QUANDO ESTIVER NA FASE SUMMARY, retorne exatamente neste formato JSON no final d
       ).join("\n")
     }\n\nSistema:`
 
-    const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
-      contents: fullPrompt,
-    })
+    const text = await callWithRetry(ai, fullPrompt)
 
-    const text = response.text ?? ""
-
-    // Extrai o JSON do plano se existir
     let plan = null
     const planMatch = text.match(/===PLAN_JSON===\n([\s\S]*?)\n===END_PLAN===/)
     if (planMatch) {
@@ -81,7 +96,6 @@ QUANDO ESTIVER NA FASE SUMMARY, retorne exatamente neste formato JSON no final d
       }
     }
 
-    // Remove o JSON da mensagem exibida
     const cleanText = text.replace(/===PLAN_JSON===[\s\S]*?===END_PLAN===/g, "").trim()
 
     return NextResponse.json({ response: cleanText, plan })
