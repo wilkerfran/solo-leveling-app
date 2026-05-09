@@ -99,6 +99,8 @@ export default function DashboardPage() {
 
       const existing = await achievementService.listByCharacter(character.$id)
       const unlockedIds = existing.filter(a => a.isCompleted).map(a => a.achievementId)
+      // Aguarda 500ms para garantir que o banco atualizou
+      await new Promise(resolve => setTimeout(resolve, 500))
       const completedQuests = await questService.listCompleted(character.$id)
       const xpEvents = await xpService.listEvents(character.$id)
 
