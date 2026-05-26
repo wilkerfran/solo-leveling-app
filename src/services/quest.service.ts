@@ -5,8 +5,7 @@ import { Quest, XP_REWARDS } from "@/types"
 export const questService = {
   async listByCharacter(characterId: string): Promise<Quest[]> {
     const response = await databases.listDocuments(
-      DB_ID,
-      COLLECTIONS.QUESTS,
+      DB_ID, COLLECTIONS.QUESTS,
       [
         Query.equal("characterId", characterId),
         Query.equal("status", "active"),
@@ -21,13 +20,32 @@ export const questService = {
 
   async listCompleted(characterId: string): Promise<Quest[]> {
     const response = await databases.listDocuments(
-      DB_ID,
-      COLLECTIONS.QUESTS,
+      DB_ID, COLLECTIONS.QUESTS,
       [
         Query.equal("characterId", characterId),
         Query.equal("status", "completed"),
         Query.orderDesc("$updatedAt"),
         Query.limit(50),
+      ]
+    )
+    return response.documents.map(doc => ({
+      ...doc,
+      attributeRewards: JSON.parse(doc.attributeRewards),
+    })) as unknown as Quest[]
+  },
+
+  async listByWeek(
+    characterId: string,
+    weekStart: string,
+    weekEnd: string
+  ): Promise<Quest[]> {
+    const response = await databases.listDocuments(
+      DB_ID, COLLECTIONS.QUESTS,
+      [
+        Query.equal("characterId", characterId),
+        Query.equal("status", "active"),
+        Query.greaterThanEqual("scheduledDate", weekStart),
+        Query.lessThanEqual("scheduledDate", weekEnd),
       ]
     )
     return response.documents.map(doc => ({
@@ -45,6 +63,8 @@ export const questService = {
       difficulty: Quest["difficulty"]
       isRecurring: boolean
       recurringType?: Quest["recurringType"]
+      recurringDays?: number[]
+      recurringFrequency?: number
       dueDate?: string
     }
   ): Promise<Quest> {
@@ -52,9 +72,7 @@ export const questService = {
     const attributeRewards = getCategoryAttributes(data.category, data.difficulty)
 
     const doc = await databases.createDocument(
-      DB_ID,
-      COLLECTIONS.QUESTS,
-      ID.unique(),
+      DB_ID, COLLECTIONS.QUESTS, ID.unique(),
       {
         characterId,
         title: data.title,
@@ -66,65 +84,119 @@ export const questService = {
         status: "active",
         isRecurring: data.isRecurring,
         recurringType: data.recurringType ?? null,
+        recurringDays: data.recurringDays && data.recurringDays.length > 0
+          ? JSON.stringify(data.recurringDays)
+          : null,
+        recurringFrequency: data.recurringFrequency ?? null,
         dueDate: data.dueDate ?? null,
         completedAt: null,
         lastCompletedAt: null,
         nextResetAt: null,
       }
     )
+    return { ...doc, attributeRewards } as unknown as Quest
+  },
 
+  async update(
+    questId: string,
+    data: Partial<{
+      title: string
+      description: string
+      difficulty: Quest["difficulty"]
+      isRecurring: boolean
+      recurringType: Quest["recurringType"]
+      recurringDays: number[]
+      recurringFrequency: number
+      xpReward: number
+    }>
+  ): Promise<Quest> {
+    // Monta o objeto de update manualmente — sem spread para evitar tipos errados
+    const updateData: Record<string, unknown> = {}
+
+    if (data.title !== undefined) updateData.title = data.title
+    if (data.description !== undefined) updateData.description = data.description
+    if (data.difficulty !== undefined) {
+      updateData.difficulty = data.difficulty
+      updateData.xpReward = XP_REWARDS[data.difficulty]
+    }
+
+    if (data.isRecurring !== undefined) {
+      updateData.isRecurring = data.isRecurring
+      if (!data.isRecurring) {
+        // Limpa todos os campos de recorrência
+        updateData.recurringType = null
+        updateData.recurringDays = null
+        updateData.recurringFrequency = null
+      } else {
+        if (data.recurringType !== undefined) {
+          updateData.recurringType = data.recurringType
+        }
+        if (data.recurringDays !== undefined) {
+          updateData.recurringDays = data.recurringDays.length > 0
+            ? JSON.stringify(data.recurringDays)
+            : null
+        }
+        if (data.recurringFrequency !== undefined) {
+          updateData.recurringFrequency = data.recurringFrequency
+        }
+      }
+    }
+
+    const doc = await databases.updateDocument(
+      DB_ID, COLLECTIONS.QUESTS, questId, updateData
+    )
     return {
       ...doc,
-      attributeRewards,
+      attributeRewards: JSON.parse(doc.attributeRewards as string),
     } as unknown as Quest
+  },
+
+  async delete(questId: string): Promise<void> {
+    await databases.deleteDocument(DB_ID, COLLECTIONS.QUESTS, questId)
+  },
+
+  async schedule(questId: string, date: string, time: string, duration: number): Promise<Quest> {
+    const doc = await databases.updateDocument(
+      DB_ID, COLLECTIONS.QUESTS, questId,
+      { scheduledDate: date, scheduledTime: time, duration }
+    )
+    return { ...doc, attributeRewards: JSON.parse(doc.attributeRewards) } as unknown as Quest
+  },
+
+  async unschedule(questId: string): Promise<Quest> {
+    const doc = await databases.updateDocument(
+      DB_ID, COLLECTIONS.QUESTS, questId,
+      { scheduledDate: null, scheduledTime: null, duration: null }
+    )
+    return { ...doc, attributeRewards: JSON.parse(doc.attributeRewards) } as unknown as Quest
   },
 
   async complete(questId: string): Promise<Quest> {
     const now = new Date()
-
-    // Busca a quest atual para verificar se é recorrente
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.QUESTS, questId)
-    const quest = {
-      ...doc,
-      attributeRewards: JSON.parse(doc.attributeRewards),
-    } as unknown as Quest
+    const quest = { ...doc, attributeRewards: JSON.parse(doc.attributeRewards) } as unknown as Quest
 
-    // Calcula o próximo reset baseado no tipo de recorrência
     let nextResetAt: string | null = null
-    let newStatus: string = "completed"
-
     if (quest.isRecurring && quest.recurringType) {
-      nextResetAt = calculateNextReset(quest.recurringType)
-      // Quests recorrentes ficam como "completed" mas têm nextResetAt definido
-      newStatus = "completed"
+      nextResetAt = calculateNextReset(quest)
     }
 
     const updated = await databases.updateDocument(
-      DB_ID,
-      COLLECTIONS.QUESTS,
-      questId,
+      DB_ID, COLLECTIONS.QUESTS, questId,
       {
-        status: newStatus,
+        status: "completed",
         completedAt: now.toISOString(),
         lastCompletedAt: now.toISOString(),
         nextResetAt,
       }
     )
-
-    return {
-      ...updated,
-      attributeRewards: JSON.parse(updated.attributeRewards),
-    } as unknown as Quest
+    return { ...updated, attributeRewards: JSON.parse(updated.attributeRewards) } as unknown as Quest
   },
 
-  // Verifica e reseta quests recorrentes que já passaram do nextResetAt
   async resetRecurringQuests(characterId: string): Promise<number> {
     const now = new Date()
-
-    // Busca quests completadas com nextResetAt no passado
     const response = await databases.listDocuments(
-      DB_ID,
-      COLLECTIONS.QUESTS,
+      DB_ID, COLLECTIONS.QUESTS,
       [
         Query.equal("characterId", characterId),
         Query.equal("status", "completed"),
@@ -133,60 +205,98 @@ export const questService = {
     )
 
     let resetCount = 0
-
     for (const doc of response.documents) {
       const nextReset = doc.nextResetAt ? new Date(doc.nextResetAt) : null
       if (nextReset && nextReset <= now) {
-        // Calcula o próximo reset baseado no tipo
-        const quest = doc as unknown as Quest
-        const newNextReset = quest.recurringType
-          ? calculateNextReset(quest.recurringType)
-          : null
-
-        await databases.updateDocument(
-          DB_ID,
-          COLLECTIONS.QUESTS,
-          doc.$id,
-          {
-            status: "active",
-            completedAt: null,
-            nextResetAt: newNextReset,
-          }
-        )
-        resetCount++
+        try {
+          const quest = doc as unknown as Quest
+          const newNextReset = quest.isRecurring ? calculateNextReset(quest) : null
+          await databases.updateDocument(
+            DB_ID, COLLECTIONS.QUESTS, doc.$id,
+            { status: "active", completedAt: null, nextResetAt: newNextReset }
+          )
+          resetCount++
+        } catch (err) {
+          console.warn("Erro ao resetar quest:", doc.$id, err)
+        }
       }
     }
-
     return resetCount
   },
+  async listRecurring(characterId: string): Promise<Quest[]> {
+  const response = await databases.listDocuments(
+    DB_ID, COLLECTIONS.QUESTS,
+    [
+      Query.equal("characterId", characterId),
+      Query.equal("status", "active"),
+      Query.equal("isRecurring", true),
+    ]
+  )
+  return response.documents.map(doc => ({
+    ...doc,
+    attributeRewards: JSON.parse(doc.attributeRewards),
+  })) as unknown as Quest[]
+},
 
   async archive(questId: string): Promise<void> {
     await databases.updateDocument(
-      DB_ID,
-      COLLECTIONS.QUESTS,
-      questId,
-      { status: "archived" }
+      DB_ID, COLLECTIONS.QUESTS, questId, { status: "archived" }
     )
   },
 }
 
-function calculateNextReset(recurringType: "daily" | "weekly"): string {
+function calculateNextReset(quest: Quest): string {
   const now = new Date()
 
-  if (recurringType === "daily") {
-    // Próximo reset à meia-noite do dia seguinte
-    const tomorrow = new Date(now)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(0, 0, 0, 0)
-    return tomorrow.toISOString()
-  } else {
-    // Próximo reset na segunda-feira da próxima semana
-    const nextMonday = new Date(now)
-    const day = nextMonday.getDay()
-    const daysUntilMonday = day === 0 ? 1 : 8 - day
-    nextMonday.setDate(nextMonday.getDate() + daysUntilMonday)
-    nextMonday.setHours(0, 0, 0, 0)
-    return nextMonday.toISOString()
+  switch (quest.recurringType) {
+    case "daily": {
+      const tomorrow = new Date(now)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      tomorrow.setHours(0, 0, 0, 0)
+      return tomorrow.toISOString()
+    }
+    case "specificDays": {
+      const days = quest.recurringDays
+        ? (JSON.parse(quest.recurringDays) as number[])
+        : []
+      if (days.length === 0) {
+        const next = new Date(now)
+        next.setDate(next.getDate() + 7)
+        next.setHours(0, 0, 0, 0)
+        return next.toISOString()
+      }
+      const sortedDays = [...days].sort((a, b) => a - b)
+      const todayDow = now.getDay()
+      const nextDow = sortedDays.find(d => d > todayDow) ?? sortedDays[0]
+      const daysUntil = nextDow > todayDow
+        ? nextDow - todayDow
+        : 7 - todayDow + nextDow
+      const next = new Date(now)
+      next.setDate(next.getDate() + daysUntil)
+      next.setHours(0, 0, 0, 0)
+      return next.toISOString()
+    }
+    case "weekly": {
+      const nextMonday = new Date(now)
+      const day = nextMonday.getDay()
+      const daysUntilMonday = day === 0 ? 1 : 8 - day
+      nextMonday.setDate(nextMonday.getDate() + daysUntilMonday)
+      nextMonday.setHours(0, 0, 0, 0)
+      return nextMonday.toISOString()
+    }
+    case "monthly": {
+      const nextMonth = new Date(now)
+      nextMonth.setMonth(nextMonth.getMonth() + 1)
+      nextMonth.setDate(1)
+      nextMonth.setHours(0, 0, 0, 0)
+      return nextMonth.toISOString()
+    }
+    default: {
+      const next = new Date(now)
+      next.setDate(next.getDate() + 1)
+      next.setHours(0, 0, 0, 0)
+      return next.toISOString()
+    }
   }
 }
 
@@ -208,6 +318,5 @@ function getCategoryAttributes(
     criativo:  { creativity: bonus, focus: Math.floor(bonus / 2) },
     outro:     { discipline: bonus },
   }
-
   return map[category] ?? { discipline: bonus }
 }

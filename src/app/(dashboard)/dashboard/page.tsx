@@ -5,8 +5,6 @@ import { useCharacter } from "@/hooks/useCharacter"
 import { useQuests } from "@/hooks/useQuests"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { QuestForm } from "@/components/quests/QuestForm"
-import { QuestCard } from "@/components/quests/QuestCard"
 import { LevelUpModal } from "@/components/ui/LevelUpModal"
 import { XPFloat } from "@/components/ui/XPFloat"
 import { NotificationBanner } from "@/components/ui/NotificationBanner"
@@ -16,6 +14,9 @@ import { questService } from "@/services/quest.service"
 import { Quest } from "@/types"
 import { WeeklyPlannerModal } from "@/components/ui/WeeklyPlannerModal"
 import { useWeeklyPenalty } from "@/hooks/useWeeklyPenalty"
+import { WeekCalendar } from "@/components/calendar/WeekCalendar"
+import { UnscheduledSidebar } from "@/components/calendar/UnscheduledSidebar"
+import { useCalendar } from "@/hooks/useCalendar"
 
 const CLASS_LABELS: Record<string, string> = {
   warrior: "Guerreiro",
@@ -41,10 +42,10 @@ const card: React.CSSProperties = {
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth()
   const { character, isLoading: charLoading, hasCharacter, updateCharacter } = useCharacter(user?.$id)
-  const { quests, isLoading: questsLoading, createQuest, completeQuest, archiveQuest, refresh } = useQuests(character?.$id)
+  const { quests, isLoading: questsLoading, completeQuest, refresh } = useQuests(character?.$id)
+  const { unscheduledQuests, refresh: refreshCalendar } = useCalendar(character?.$id)
   const router = useRouter()
 
-  const [showForm, setShowForm] = useState(false)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [levelUpData, setLevelUpData] = useState<number | null>(null)
   const [xpFloat, setXpFloat] = useState<number | null>(null)
@@ -84,11 +85,6 @@ export default function DashboardPage() {
   const xpPercent = Math.min(Math.floor((character.xp / character.xpToNextLevel) * 100), 100)
   const maxAttr = Math.max(...Object.values(character.attributes), 10)
 
-  async function handleCreateQuest(data: Parameters<typeof createQuest>[0]) {
-    await createQuest(data)
-    setShowForm(false)
-  }
-
   async function handleCompleteQuest(quest: Quest) {
     if (!character) return
     setCompletingId(quest.$id)
@@ -99,7 +95,6 @@ export default function DashboardPage() {
 
       const existing = await achievementService.listByCharacter(character.$id)
       const unlockedIds = existing.filter(a => a.isCompleted).map(a => a.achievementId)
-      // Aguarda 500ms para garantir que o banco atualizou
       await new Promise(resolve => setTimeout(resolve, 500))
       const completedQuests = await questService.listCompleted(character.$id)
       const xpEvents = await xpService.listEvents(character.$id)
@@ -130,6 +125,8 @@ export default function DashboardPage() {
       if (didLevelUp) {
         setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
       }
+
+      refreshCalendar()
     } finally {
       setCompletingId(null)
     }
@@ -145,26 +142,27 @@ export default function DashboardPage() {
         <XPFloat amount={xpFloat} onDone={() => setXpFloat(null)} />
       )}
       {showPlanner && character && (
-  <WeeklyPlannerModal
-    character={character}
-    activeQuests={quests.filter(q => {
-      const thisWeekStart = new Date()
-      const day = thisWeekStart.getDay()
-      const diff = day === 0 ? -6 : 1 - day
-      thisWeekStart.setDate(thisWeekStart.getDate() + diff)
-      thisWeekStart.setHours(0, 0, 0, 0)
-      return new Date(q.createdAt) < thisWeekStart
-    })}
-    onClose={() => setShowPlanner(false)}
-    onPlanCreated={(updatedCharacter) => {
-      updateCharacter(updatedCharacter)
-      refresh()
-      setShowPlanner(false)
-    }}
-  />
-)}
+        <WeeklyPlannerModal
+          character={character}
+          activeQuests={quests.filter(q => {
+            const thisWeekStart = new Date()
+            const day = thisWeekStart.getDay()
+            const diff = day === 0 ? -6 : 1 - day
+            thisWeekStart.setDate(thisWeekStart.getDate() + diff)
+            thisWeekStart.setHours(0, 0, 0, 0)
+            return new Date(q.createdAt) < thisWeekStart
+          })}
+          onClose={() => setShowPlanner(false)}
+          onPlanCreated={(updatedCharacter) => {
+            updateCharacter(updatedCharacter)
+            refresh()
+            refreshCalendar()
+            setShowPlanner(false)
+          }}
+        />
+      )}
 
-      <div style={{ maxWidth: "680px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px 32px 0", display: "flex", flexDirection: "column", gap: "20px" }}>
 
         <NotificationBanner questsCount={quests.length} />
 
@@ -202,6 +200,30 @@ export default function DashboardPage() {
           <p style={{ textAlign: "right", color: "#475569", fontSize: "11px", marginTop: "6px" }}>{xpPercent}%</p>
         </div>
 
+        {/* Atributos */}
+        <div style={card}>
+          <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
+            Atributos
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {ATTRIBUTE_CONFIG.map(({ key, label, color }) => {
+              const value = character.attributes[key as keyof typeof character.attributes] ?? 0
+              const pct = Math.min((value / maxAttr) * 100, 100)
+              return (
+                <div key={key}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <span style={{ color: "#CBD5E1", fontSize: "14px" }}>{label}</span>
+                    <span style={{ color: "white", fontSize: "14px", fontWeight: 600 }}>{value}</span>
+                  </div>
+                  <div style={{ width: "100%", height: "6px", backgroundColor: "#1F2937", borderRadius: "99px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: "99px", backgroundColor: color, width: `${pct}%`, transition: "width 0.7s ease" }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Botão do Planejador Semanal */}
         <button
           onClick={() => setShowPlanner(true)}
@@ -227,88 +249,26 @@ export default function DashboardPage() {
           📋 Planejador Semanal
         </button>
 
-        {/* Atributos */}
-        <div style={card}>
-          <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
-            Atributos
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {ATTRIBUTE_CONFIG.map(({ key, label, color }) => {
-              const value = character.attributes[key as keyof typeof character.attributes] ?? 0
-              const pct = Math.min((value / maxAttr) * 100, 100)
-              return (
-                <div key={key}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                    <span style={{ color: "#CBD5E1", fontSize: "14px" }}>{label}</span>
-                    <span style={{ color: "white", fontSize: "14px", fontWeight: 600 }}>{value}</span>
-                  </div>
-                  <div style={{ width: "100%", height: "6px", backgroundColor: "#1F2937", borderRadius: "99px", overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: "99px", backgroundColor: color, width: `${pct}%`, transition: "width 0.7s ease" }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Quests */}
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-            <p style={{ color: "#64748B", fontSize: "11px", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase" }}>
-              Quests ativas
-            </p>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              style={{
-                color: "#A78BFA", fontSize: "12px", padding: "6px 14px",
-                borderRadius: "8px", border: "1px solid rgba(124,58,237,0.35)",
-                backgroundColor: "transparent", cursor: "pointer", transition: "all 0.2s",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = "#7C3AED"
-                e.currentTarget.style.color = "white"
-                e.currentTarget.style.backgroundColor = "rgba(124,58,237,0.1)"
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = "rgba(124,58,237,0.35)"
-                e.currentTarget.style.color = "#A78BFA"
-                e.currentTarget.style.backgroundColor = "transparent"
-              }}
-            >
-              {showForm ? "Cancelar" : "+ Nova quest"}
-            </button>
-          </div>
-
-          {showForm && (
-            <div style={{ marginBottom: "20px", paddingBottom: "20px", borderBottom: "1px solid #1F2937" }}>
-              <QuestForm onSubmit={handleCreateQuest} onCancel={() => setShowForm(false)} />
-            </div>
-          )}
-
-          {questsLoading ? (
-            <div style={{ padding: "40px 0", textAlign: "center" }}>
-              <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p style={{ color: "#475569", fontSize: "13px" }}>Carregando quests...</p>
-            </div>
-          ) : quests.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #1F2937", borderRadius: "12px" }}>
-              <p style={{ color: "#64748B", fontSize: "14px", marginBottom: "6px" }}>Nenhuma quest ativa</p>
-              <p style={{ color: "#475569", fontSize: "12px" }}>Crie sua primeira missão acima</p>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {quests.map(quest => (
-                <QuestCard
-                  key={quest.$id}
-                  quest={quest}
-                  onComplete={handleCompleteQuest}
-                  onArchive={archiveQuest}
-                  isCompleting={completingId === quest.$id}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Calendário + Sidebar */}
+<div
+  className="calendar-layout"
+  style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}
+>
+  <div className="calendar-sidebar">
+    <UnscheduledSidebar
+      quests={unscheduledQuests}
+      isLoading={questsLoading}
+      characterId={character.$id}
+      onQuestCreated={refreshCalendar}
+    />
+  </div>
+  <WeekCalendar
+    characterId={character.$id}
+    onCompleteQuest={handleCompleteQuest}
+    unscheduledQuests={unscheduledQuests}
+    onQuestScheduled={refreshCalendar}
+  />
+</div>
 
       </div>
     </main>

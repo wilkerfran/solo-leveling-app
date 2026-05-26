@@ -18,21 +18,29 @@ export interface Character {
   createdAt: string
 }
 
-// Representa uma quest/tarefa
+// Representa uma quest/tarefa — definição única e completa
 export interface Quest {
   $id: string
+  $createdAt: string
   characterId: string
   title: string
   description?: string
   category: string
-  difficulty: 'easy' | 'medium' | 'hard' | 'legendary'
+  difficulty: "easy" | "medium" | "hard" | "legendary"
   xpReward: number
-  attributeRewards: Partial<Character['attributes']>
-  status: 'active' | 'completed' | 'failed' | 'archived'
+  attributeRewards: Partial<Character["attributes"]>
+  status: "active" | "completed" | "failed" | "archived"
   isRecurring: boolean
-  recurringType?: 'daily' | 'weekly'
+  recurringType?: "daily" | "weekly" | "specificDays" | "monthly"
+  recurringDays?: string        // JSON: [1,3,5] = seg,qua,sex
+  recurringFrequency?: number   // dia do mês para mensal
   dueDate?: string
   completedAt?: string
+  lastCompletedAt?: string
+  nextResetAt?: string
+  scheduledDate?: string
+  scheduledTime?: string
+  duration?: number
   createdAt: string
 }
 
@@ -69,7 +77,6 @@ export interface Achievement {
   isCompleted: boolean
 }
 
-// Conquistas fixas pré-definidas
 type AchievementStats = {
   level: number
   questsCompleted: number
@@ -130,12 +137,11 @@ export interface PenaltyEvent {
   questId: string
   questTitle: string
   xpLost: number
-  attributePenalties: string // JSON serializado
+  attributePenalties: string
   reason: string
   weekOf: string
 }
 
-// Penalidades por dificuldade
 export const PENALTY_AMOUNTS = {
   easy:      { xp: 10,  attributes: 1 },
   medium:    { xp: 30,  attributes: 2 },
@@ -143,21 +149,33 @@ export const PENALTY_AMOUNTS = {
   legendary: { xp: 150, attributes: 5 },
 } as const
 
-export interface Quest {
+export interface CalendarEvent {
   $id: string
+  $createdAt: string
   characterId: string
   title: string
   description?: string
-  category: string
-  difficulty: 'easy' | 'medium' | 'hard' | 'legendary'
-  xpReward: number
-  attributeRewards: Partial<Character['attributes']>
-  status: 'active' | 'completed' | 'failed' | 'archived'
+  date: string
+  time: string
+  duration: number
+  color?: string
   isRecurring: boolean
-  recurringType?: 'daily' | 'weekly'
-  dueDate?: string
-  completedAt?: string
-  lastCompletedAt?: string  // novo
-  nextResetAt?: string      // novo
-  createdAt: string
+  recurringDays?: string
+}
+
+export interface CalendarItem {
+  id: string
+  type: "quest" | "event"
+  title: string
+  description?: string
+  date: string
+  time?: string
+  duration?: number
+  color?: string
+  difficulty?: Quest["difficulty"]
+  xpReward?: number
+  isCompleted?: boolean
+  isRecurring?: boolean
+  recurringType?: string
+  raw: Quest | CalendarEvent
 }

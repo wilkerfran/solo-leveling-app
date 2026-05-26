@@ -131,3 +131,25 @@ body {
   33% { transform: translateY(-30px) translateX(10px); }
   66% { transform: translateY(-10px) translateX(-15px); }
 }
+
+/* Layout do dashboard no mobile */
+@media (max-width: 767px) {
+  .calendar-layout {
+    flex-direction: column !important;
+  }
+  .calendar-sidebar {
+    display: none !important;
+  }
+}
+
+.calendar-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+@media (max-width: 767px) {
+  .calendar-sidebar {
+    display: none !important;
+  }
+}
