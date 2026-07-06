@@ -54,6 +54,21 @@ export const questService = {
     })) as unknown as Quest[]
   },
 
+  async listRecurring(characterId: string): Promise<Quest[]> {
+    const response = await databases.listDocuments(
+      DB_ID, COLLECTIONS.QUESTS,
+      [
+        Query.equal("characterId", characterId),
+        Query.equal("isRecurring", true),
+        Query.notEqual("status", "archived"),
+      ]
+    )
+    return response.documents.map(doc => ({
+      ...doc,
+      attributeRewards: JSON.parse(doc.attributeRewards),
+    })) as unknown as Quest[]
+  },
+
   async create(
     characterId: string,
     data: {
@@ -110,7 +125,6 @@ export const questService = {
       xpReward: number
     }>
   ): Promise<Quest> {
-    // Monta o objeto de update manualmente — sem spread para evitar tipos errados
     const updateData: Record<string, unknown> = {}
 
     if (data.title !== undefined) updateData.title = data.title
@@ -123,7 +137,6 @@ export const questService = {
     if (data.isRecurring !== undefined) {
       updateData.isRecurring = data.isRecurring
       if (!data.isRecurring) {
-        // Limpa todos os campos de recorrência
         updateData.recurringType = null
         updateData.recurringDays = null
         updateData.recurringFrequency = null
@@ -195,6 +208,8 @@ export const questService = {
 
   async resetRecurringQuests(characterId: string): Promise<number> {
     const now = new Date()
+    const todayStr = now.toLocaleDateString("en-CA") // "2026-07-06"
+
     const response = await databases.listDocuments(
       DB_ID, COLLECTIONS.QUESTS,
       [
@@ -209,6 +224,15 @@ export const questService = {
       const nextReset = doc.nextResetAt ? new Date(doc.nextResetAt) : null
       if (nextReset && nextReset <= now) {
         try {
+          // Não reseta se foi completada hoje — usuário ainda precisa ver como concluída
+          const completedAt = doc.completedAt ? new Date(doc.completedAt) : null
+          const completedToday = completedAt &&
+            completedAt.toLocaleDateString("en-CA") === todayStr
+
+          if (completedToday) {
+            continue
+          }
+
           const quest = doc as unknown as Quest
           const newNextReset = quest.isRecurring ? calculateNextReset(quest) : null
           await databases.updateDocument(
@@ -223,20 +247,6 @@ export const questService = {
     }
     return resetCount
   },
-  async listRecurring(characterId: string): Promise<Quest[]> {
-  const response = await databases.listDocuments(
-    DB_ID, COLLECTIONS.QUESTS,
-    [
-      Query.equal("characterId", characterId),
-      Query.equal("status", "active"),
-      Query.equal("isRecurring", true),
-    ]
-  )
-  return response.documents.map(doc => ({
-    ...doc,
-    attributeRewards: JSON.parse(doc.attributeRewards),
-  })) as unknown as Quest[]
-},
 
   async archive(questId: string): Promise<void> {
     await databases.updateDocument(

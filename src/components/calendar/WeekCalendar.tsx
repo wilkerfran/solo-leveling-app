@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { format, addDays, startOfWeek, isToday, parseISO, addDays as add } from "date-fns"
+import { format, addDays, startOfWeek, isToday, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CalendarItem, Quest } from "@/types"
 import { useCalendar } from "@/hooks/useCalendar"
@@ -22,12 +22,13 @@ interface WeekCalendarProps {
   onCompleteQuest: (quest: Quest) => void
   unscheduledQuests: Quest[]
   onQuestScheduled: () => void
+  refreshTrigger?: number
 }
 
-export function WeekCalendar({ characterId, onCompleteQuest, unscheduledQuests, onQuestScheduled }: WeekCalendarProps) {
+export function WeekCalendar({ characterId, onCompleteQuest, unscheduledQuests, onQuestScheduled, refreshTrigger }: WeekCalendarProps) {
   const {
     currentWeek, weekStart, selectedDay, setSelectedDay,
-    isLoading, getItemsForDay, goToNextWeek, goToPrevWeek, goToToday,
+    getItemsForDay, goToNextWeek, goToPrevWeek, goToToday,
     scheduleQuest, createEvent, updateEvent, deleteEvent, moveItem, refresh,
   } = useCalendar(characterId)
 
@@ -37,16 +38,14 @@ export function WeekCalendar({ characterId, onCompleteQuest, unscheduledQuests, 
   const [newEventDate, setNewEventDate] = useState("")
   const [newEventTime, setNewEventTime] = useState("")
   const [draggedItem, setDraggedItem] = useState<CalendarItem | null>(null)
-  // Remove o useEffect do isMobile e substitui o useState do view por:
-const [view, setView] = useState<"week" | "day">(() => {
-  if (typeof window !== "undefined" && window.innerWidth < 768) return "day"
-  return "week"
-})
+  const [view, setView] = useState<"week" | "day">(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return "day"
+    return "week"
+  })
   const [isMobile, setIsMobile] = useState(false)
   const [showDrawer, setShowDrawer] = useState(false)
   const touchStartX = useRef<number>(0)
 
-  // Detecta mobile
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
     check()
@@ -54,6 +53,11 @@ const [view, setView] = useState<"week" | "day">(() => {
     return () => window.removeEventListener("resize", check)
   }, [])
 
+  // Quando o dashboard pede refresh, força o calendário interno a rebuscar
+  useEffect(() => {
+    if (refreshTrigger === undefined || refreshTrigger === 0) return
+    refresh()
+  }, [refreshTrigger])
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(startOfWeek(currentWeek, { weekStartsOn: 1 }), i)
@@ -98,7 +102,6 @@ const [view, setView] = useState<"week" | "day">(() => {
     setDraggedItem(null)
   }
 
-  // Swipe entre dias no mobile
   function handleTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX
   }
@@ -109,12 +112,10 @@ const [view, setView] = useState<"week" | "day">(() => {
 
     const currentIndex = weekDays.findIndex(d => d.date === selectedDay)
     if (diff > 0 && currentIndex < 6) {
-      // Swipe esquerda — próximo dia
       const next = weekDays[currentIndex + 1]
       if (next) setSelectedDay(next.date)
       else goToNextWeek()
     } else if (diff < 0 && currentIndex > 0) {
-      // Swipe direita — dia anterior
       const prev = weekDays[currentIndex - 1]
       if (prev) setSelectedDay(prev.date)
       else goToPrevWeek()
@@ -191,9 +192,7 @@ const [view, setView] = useState<"week" | "day">(() => {
         backgroundColor: "#0D1117",
         borderLeft: "1px solid #1F2937", borderRight: "1px solid #1F2937",
         display: "grid",
-        gridTemplateColumns: view === "week"
-          ? `48px repeat(7, 1fr)`
-          : `48px 1fr`,
+        gridTemplateColumns: view === "week" ? `48px repeat(7, 1fr)` : `48px 1fr`,
         flexShrink: 0,
       }}>
         <div style={{ borderRight: "1px solid #1F2937" }} />
@@ -265,16 +264,24 @@ const [view, setView] = useState<"week" | "day">(() => {
                       onClick={e => { e.stopPropagation(); handleItemClick(item) }}
                       style={{
                         position: "absolute", top: `${top}px`, left: "2px", right: "2px",
-                        height: `${height}px`, backgroundColor: diffStyle.bg,
-                        borderLeft: `3px solid ${diffStyle.border}`, borderRadius: "4px",
+                        height: `${height}px`,
+                        backgroundColor: item.isCompleted ? "rgba(30,30,30,0.6)" : diffStyle.bg,
+                        borderLeft: `3px solid ${item.isCompleted ? "#374151" : diffStyle.border}`,
+                        borderRadius: "4px",
                         padding: "3px 6px", cursor: "pointer", zIndex: 10, overflow: "hidden",
                         userSelect: "none",
+                        opacity: item.isCompleted ? 0.5 : 1,
                       }}
                     >
-                      <p style={{ color: diffStyle.text, fontSize: "10px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {item.time} {item.title}
+                      <p style={{
+                        color: item.isCompleted ? "#475569" : diffStyle.text,
+                        fontSize: "10px", fontWeight: 600,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        textDecoration: item.isCompleted ? "line-through" : "none",
+                      }}>
+                        {item.isCompleted ? "✓ " : ""}{item.time} {item.title}
                       </p>
-                      {height > 40 && item.xpReward && (
+                      {height > 40 && item.xpReward && !item.isCompleted && (
                         <p style={{ color: "#475569", fontSize: "9px" }}>+{item.xpReward} XP</p>
                       )}
                     </div>
@@ -286,56 +293,36 @@ const [view, setView] = useState<"week" | "day">(() => {
         </div>
       </div>
 
-      {/* Gaveta mobile de quests não agendadas */}
+      {/* Gaveta mobile */}
       {isMobile && (
         <>
-          {/* Overlay */}
           {showDrawer && (
-            <div
-              onClick={() => setShowDrawer(false)}
-              style={{
-                position: "fixed", inset: 0, zIndex: 90,
-                backgroundColor: "rgba(0,0,0,0.5)",
-              }}
-            />
+            <div onClick={() => setShowDrawer(false)} style={{
+              position: "fixed", inset: 0, zIndex: 90,
+              backgroundColor: "rgba(0,0,0,0.5)",
+            }} />
           )}
-
-          {/* Gaveta */}
           <div style={{
-            position: "fixed", bottom: 0, left: 0, right: 0,
-            zIndex: 95,
-            backgroundColor: "#0D1117",
-            border: "1px solid #1F2937",
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 95,
+            backgroundColor: "#0D1117", border: "1px solid #1F2937",
             borderRadius: "20px 20px 0 0",
             padding: "0 0 max(16px, env(safe-area-inset-bottom))",
             transform: showDrawer ? "translateY(0)" : "translateY(100%)",
             transition: "transform 0.3s ease",
-            maxHeight: "70vh",
-            display: "flex", flexDirection: "column",
+            maxHeight: "70vh", display: "flex", flexDirection: "column",
           }}>
-            {/* Handle */}
             <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 8px" }}>
               <div style={{ width: "40px", height: "4px", borderRadius: "2px", backgroundColor: "#1F2937" }} />
             </div>
-
-            {/* Header da gaveta */}
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "0 20px 12px",
-              borderBottom: "1px solid #1F2937",
+              padding: "0 20px 12px", borderBottom: "1px solid #1F2937",
             }}>
               <p style={{ color: "#64748B", fontSize: "12px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Não agendadas ({unscheduledQuests.length})
               </p>
-              <button
-                onClick={() => setShowDrawer(false)}
-                style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", fontSize: "20px" }}
-              >
-                ×
-              </button>
+              <button onClick={() => setShowDrawer(false)} style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", fontSize: "20px" }}>×</button>
             </div>
-
-            {/* Lista de quests */}
             <div style={{ overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
               {unscheduledQuests.length === 0 ? (
                 <p style={{ color: "#374151", fontSize: "13px", textAlign: "center", padding: "24px 0" }}>
@@ -349,34 +336,22 @@ const [view, setView] = useState<"week" | "day">(() => {
                     hard:      { color: "#F97316", bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.2)" },
                     legendary: { color: "#A78BFA", bg: "rgba(167,139,250,0.08)", border: "rgba(167,139,250,0.2)" },
                   }[quest.difficulty]
-
                   return (
                     <div
                       key={quest.$id}
                       onClick={() => {
-                        // No mobile, agenda para o dia selecionado ao tocar
                         scheduleQuest(quest.$id, selectedDay, "09:00", 60)
-                          .then(() => {
-                            onQuestScheduled()
-                            setShowDrawer(false)
-                          })
+                          .then(() => { onQuestScheduled(); setShowDrawer(false) })
                       }}
                       style={{
-                        padding: "12px 14px",
-                        backgroundColor: colors.bg,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 14px", backgroundColor: colors.bg,
+                        border: `1px solid ${colors.border}`, borderRadius: "10px",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
                       }}
                     >
                       <div>
-                        <p style={{ color: "white", fontSize: "13px", fontWeight: 500, marginBottom: "3px" }}>
-                          {quest.title}
-                        </p>
-                        <span style={{ color: colors.color, fontSize: "11px" }}>
-                          {quest.difficulty} · +{quest.xpReward} XP
-                        </span>
+                        <p style={{ color: "white", fontSize: "13px", fontWeight: 500, marginBottom: "3px" }}>{quest.title}</p>
+                        <span style={{ color: colors.color, fontSize: "11px" }}>{quest.difficulty} · +{quest.xpReward} XP</span>
                       </div>
                       <span style={{ color: "#475569", fontSize: "12px" }}>+ Hoje</span>
                     </div>
@@ -420,7 +395,13 @@ const [view, setView] = useState<"week" | "day">(() => {
         <ItemModal
           item={selectedItem}
           onComplete={() => {
-            if (selectedItem.type === "quest") onCompleteQuest(selectedItem.raw as Quest)
+            if (selectedItem.type === "quest") {
+              const raw = selectedItem.raw as Quest
+              const realId = selectedItem.id.length > 20
+                ? selectedItem.id.substring(0, 20)
+                : selectedItem.id
+              onCompleteQuest({ ...raw, $id: realId })
+            }
             setShowItemModal(false)
             refresh()
           }}

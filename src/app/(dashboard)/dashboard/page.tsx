@@ -50,6 +50,7 @@ export default function DashboardPage() {
   const [levelUpData, setLevelUpData] = useState<number | null>(null)
   const [xpFloat, setXpFloat] = useState<number | null>(null)
   const [showPlanner, setShowPlanner] = useState(false)
+  const [calendarRefreshTick, setCalendarRefreshTick] = useState(0)
 
   const { shouldShowPlanner, setShouldShowPlanner } = useWeeklyPenalty(
     character,
@@ -87,9 +88,13 @@ export default function DashboardPage() {
 
   async function handleCompleteQuest(quest: Quest) {
     if (!character) return
-    setCompletingId(quest.$id)
+
+    const realId = quest.$id.length > 20 ? quest.$id.substring(0, 20) : quest.$id
+    const questToComplete = { ...quest, $id: realId }
+    setCompletingId(realId)
+
     try {
-      const { updatedCharacter, didLevelUp } = await completeQuest(quest, character)
+      const { updatedCharacter, didLevelUp } = await completeQuest(questToComplete, character)
       updateCharacter(updatedCharacter)
       setXpFloat(quest.xpReward)
 
@@ -126,7 +131,12 @@ export default function DashboardPage() {
         setTimeout(() => setLevelUpData(updatedCharacter.level), 600)
       }
 
+      // Aguarda banco confirmar e força refresh nas duas instâncias
+      await new Promise(resolve => setTimeout(resolve, 800))
       refreshCalendar()
+      setCalendarRefreshTick(t => t + 1)
+    } catch (err) {
+      console.error("Erro ao completar quest:", err)
     } finally {
       setCompletingId(null)
     }
@@ -157,6 +167,7 @@ export default function DashboardPage() {
             updateCharacter(updatedCharacter)
             refresh()
             refreshCalendar()
+            setCalendarRefreshTick(t => t + 1)
             setShowPlanner(false)
           }}
         />
@@ -250,25 +261,26 @@ export default function DashboardPage() {
         </button>
 
         {/* Calendário + Sidebar */}
-<div
-  className="calendar-layout"
-  style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}
->
-  <div className="calendar-sidebar">
-    <UnscheduledSidebar
-      quests={unscheduledQuests}
-      isLoading={questsLoading}
-      characterId={character.$id}
-      onQuestCreated={refreshCalendar}
-    />
-  </div>
-  <WeekCalendar
-    characterId={character.$id}
-    onCompleteQuest={handleCompleteQuest}
-    unscheduledQuests={unscheduledQuests}
-    onQuestScheduled={refreshCalendar}
-  />
-</div>
+        <div
+          className="calendar-layout"
+          style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}
+        >
+          <div className="calendar-sidebar">
+            <UnscheduledSidebar
+              quests={unscheduledQuests}
+              isLoading={questsLoading}
+              characterId={character.$id}
+              onQuestCreated={refreshCalendar}
+            />
+          </div>
+          <WeekCalendar
+            characterId={character.$id}
+            onCompleteQuest={handleCompleteQuest}
+            unscheduledQuests={unscheduledQuests}
+            onQuestScheduled={refreshCalendar}
+            refreshTrigger={calendarRefreshTick}
+          />
+        </div>
 
       </div>
     </main>

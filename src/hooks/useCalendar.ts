@@ -62,9 +62,9 @@ export function useCalendar(characterId: string | undefined) {
     const dayOfMonth = new Date(date + "T12:00:00").getDate()
     const addedIds = new Set<string>()
 
-    // Quests agendadas neste dia específico
+    // Quests agendadas neste dia específico (não recorrentes)
     scheduledQuests
-      .filter(q => q.scheduledDate === date)
+      .filter(q => q.scheduledDate === date && !q.isRecurring)
       .forEach(q => {
         addedIds.add(q.$id)
         items.push({
@@ -78,7 +78,7 @@ export function useCalendar(characterId: string | undefined) {
           difficulty: q.difficulty,
           xpReward: q.xpReward,
           isCompleted: q.status === "completed",
-          isRecurring: q.isRecurring,
+          isRecurring: false,
           recurringType: q.recurringType,
           raw: q,
         })
@@ -105,7 +105,6 @@ export function useCalendar(characterId: string | undefined) {
         }
 
         case "weekly": {
-          // Aparece no mesmo dia da semana que foi criada/agendada
           if (q.scheduledDate) {
             const scheduledDow = new Date(q.scheduledDate + "T12:00:00").getDay()
             shouldShow = dayOfWeek === scheduledDow
@@ -114,7 +113,6 @@ export function useCalendar(characterId: string | undefined) {
         }
 
         case "monthly": {
-          // Aparece no mesmo dia do mês que foi criada/agendada
           if (q.scheduledDate) {
             const scheduledDom = new Date(q.scheduledDate + "T12:00:00").getDate()
             shouldShow = dayOfMonth === scheduledDom
@@ -124,6 +122,11 @@ export function useCalendar(characterId: string | undefined) {
       }
 
       if (shouldShow) {
+        // Converte completedAt UTC para data local antes de comparar
+        const completedToday = q.status === "completed" &&
+          q.completedAt &&
+          new Date(q.completedAt).toLocaleDateString("en-CA") === date
+
         items.push({
           id: `${q.$id}-${date}`,
           type: "quest",
@@ -134,7 +137,7 @@ export function useCalendar(characterId: string | undefined) {
           duration: q.duration,
           difficulty: q.difficulty,
           xpReward: q.xpReward,
-          isCompleted: false,
+          isCompleted: !!completedToday,
           isRecurring: true,
           recurringType: q.recurringType,
           raw: q,
