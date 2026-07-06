@@ -37,7 +37,7 @@ export function useCalendar(characterId: string | undefined) {
             setScheduledQuests(scheduled)
             setRecurringQuests(recurring)
             setUnscheduledQuests(
-              allActive.filter(q => !q.scheduledDate && !q.isRecurring)
+              allActive.filter(q => !q.scheduledDate)
             )
             setEvents(weekEvents)
             setRecurringEvents(recurringEvts)

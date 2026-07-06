@@ -53,10 +53,23 @@ export function UnscheduledSidebar({ quests, isLoading, characterId, onQuestCrea
   const [recurringDays, setRecurringDays] = useState<number[]>([])
   const [recurringFrequency, setRecurringFrequency] = useState(1)
   const [isSaving, setIsSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function handleDragStart(e: React.DragEvent, quest: Quest) {
     e.dataTransfer.setData("questId", quest.$id)
     e.dataTransfer.setData("type", "unscheduled")
+  }
+
+  async function handleDelete(e: React.MouseEvent, questId: string) {
+    e.stopPropagation()
+    e.preventDefault()
+    setDeletingId(questId)
+    try {
+      await questService.delete(questId)
+      onQuestCreated()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -178,9 +191,27 @@ export function UnscheduledSidebar({ quests, isLoading, characterId, onQuestCrea
                 borderRadius: "8px",
                 cursor: "grab",
                 userSelect: "none",
+                position: "relative",
+                opacity: deletingId === quest.$id ? 0.5 : 1,
               }}
             >
-              <p style={{ color: "white", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+              {/* Botão deletar */}
+              <button
+                onClick={e => handleDelete(e, quest.$id)}
+                disabled={deletingId === quest.$id}
+                style={{
+                  position: "absolute", top: "5px", right: "5px",
+                  color: "#374151", background: "none", border: "none",
+                  cursor: "pointer", fontSize: "15px", lineHeight: 1,
+                  padding: "2px 4px",
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
+                onMouseLeave={e => e.currentTarget.style.color = "#374151"}
+              >
+                ×
+              </button>
+
+              <p style={{ color: "white", fontSize: "12px", fontWeight: 500, marginBottom: "4px", paddingRight: "16px" }}>
                 {quest.title}
               </p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
